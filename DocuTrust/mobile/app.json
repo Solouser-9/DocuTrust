@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "DocuTrust",
+    "slug": "docutrust",
+    "description": "Secure document vault and verification platform",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "scheme": "docutrust",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F3EA",
+    "ios": {
+      "bundleIdentifier": "app.docutrust.mobile",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "app.docutrust.mobile"
+    },
+    "plugins": [
+      "expo-document-picker",
+      "expo-status-bar"
+    ],
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    }
+  }
+}

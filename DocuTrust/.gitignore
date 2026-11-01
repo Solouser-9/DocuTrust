@@ -1,0 +1,65 @@
+# ============================================================
+# DocuTrust — root .gitignore
+# Purpose: keep secrets, build outputs, dependencies and editor
+# settings out of GitHub. Patterns apply to the whole tree.
+# ============================================================
+
+# ---- Secrets & environment (NEVER commit real values) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ---- Java server build artifacts ----
+target/
+*.class
+*.jar
+!server/lib/.gitkeep
+*.war
+hs_err_pid*
+replay_pid*
+
+# ---- JavaScript / Expo / React Native ----
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json.bak
+
+# ---- General build output ----
+build/
+out/
+
+# ---- Test & coverage output ----
+coverage/
+.nyc_output/
+
+# ---- IDEs & editors ----
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.swp
+
+# ---- Operating systems ----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---- Logs & temp ----
+*.log
+logs/
+tmp/
+.tmp/

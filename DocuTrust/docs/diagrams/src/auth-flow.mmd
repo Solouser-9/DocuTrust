@@ -1,0 +1,52 @@
+%% DocuTrust auth lifecycle (Mermaid source) - human-readable participant names
+%% Covers login, MFA email fallback (440), step-up, and OTP password reset.
+sequenceDiagram
+    autonumber
+    participant Mobile_App as Mobile_App (ApiClient)
+    participant Middleware as Middleware (JWT + rate limit)
+    participant Login_Service as Login_Service (AuthService)
+    participant OTP_Service as OTP_Service (hashed codes)
+    participant Mail_Service as Mail_Service (Brevo)
+    participant Database as Database (PostgreSQL)
+
+    Mobile_App->>Middleware: POST /api/auth/login {email, password}
+    Middleware->>Middleware: Rate_Limiter: auth scope, 20/min/IP (Bucket4j)
+    Middleware->>Login_Service: login()
+    Login_Service->>Database: SELECT user BY email (PreparedStatement)
+    alt bad credentials or suspended
+        Login_Service-->>Mobile_App: 401 UNAUTHORIZED (+ audit_logs row)
+    else MFA enabled, app code offered
+        Login_Service-->>Mobile_App: 440 MFA_REQUIRED (TOTP)
+    else MFA enabled, useEmailMfa true - Phase 4 fallback
+        Login_Service->>OTP_Service: issue 6-digit code (purpose=mfa_login)
+        OTP_Service->>Database: INSERT email_otps (sha256 hash only, 10 min)
+        Login_Service->>Mail_Service: sendOtp (code leaves only by email)
+        Login_Service-->>Mobile_App: 440 MFA_EMAIL_CHALLENGE {challenge JWT, masked email}
+        Mobile_App->>Middleware: POST /api/auth/verify-otp {challenge, code}
+        Middleware->>Login_Service: verifyOtp()
+        Login_Service->>OTP_Service: verify (single use, 5 attempts max)
+        Login_Service->>Database: INSERT refresh_tokens (sha256 hash only)
+        Login_Service-->>Mobile_App: 200 {user, accessToken (JWT 15min), refreshToken (7d)}
+    else success without MFA
+        Login_Service->>Database: INSERT refresh_tokens (sha256 hash only)
+        Login_Service-->>Mobile_App: 200 {user, accessToken, refreshToken}
+    end
+
+    Mobile_App->>Middleware: DELETE /api/documents/:id/permanent (destructive)
+    Middleware->>Middleware: JWT valid, but step-up token missing
+    Middleware-->>Mobile_App: 403 STEP_UP_REQUIRED
+    Mobile_App->>Middleware: POST /api/auth/request-step-up
+    Middleware->>Login_Service: issue code (purpose=step_up) + email
+    Mobile_App->>Middleware: POST /api/auth/verify-step-up {code}
+    Middleware-->>Mobile_App: 200 {stepUpToken, ttl 5 min}
+    Mobile_App->>Middleware: retry DELETE with X-Step-Up-Token header
+    Middleware->>Middleware: verify typ=step_up + self claim
+    Middleware-->>Mobile_App: 200 deleted
+
+    Note over Mobile_App,Database: Password reset (OTP flow)
+    Mobile_App->>Middleware: POST /api/auth/forgot-password {email}
+    Login_Service->>OTP_Service: issue code (purpose=password_reset)
+    Login_Service->>Mail_Service: email the code (body never carries it)
+    Mobile_App->>Middleware: POST /api/auth/reset-password-otp {email, code, newPassword}
+    Login_Service->>OTP_Service: verify + burn
+    Login_Service->>Database: UPDATE password + revoke all sessions

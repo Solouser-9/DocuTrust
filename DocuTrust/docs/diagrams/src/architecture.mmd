@@ -1,0 +1,64 @@
+%% DocuTrust system architecture (Mermaid source) - human-readable node names
+%% Render at https://mermaid.live or with mermaid-cli (docs/diagrams/architecture.png)
+flowchart TB
+    subgraph Presentation_Layer["Layer 1 - Presentation: React Native (Expo, JavaScript) - 45 screens, MVP pattern"]
+        direction LR
+        Auth_Microservice["Auth microservice<br/>login / MFA / email OTP code"]
+        Documents_Microservice["Documents<br/>vault, versions"]
+        Folders_Microservice["Folders"]
+        Sharing_Microservice["Sharing<br/>links, revoke"]
+        Verification_Microservice["Verification<br/>proof links"]
+        Notifications_Microservice["Notifications"]
+        Admin_Microservice["Admin<br/>review queue"]
+        Org_Microservice["Organisation<br/>members"]
+        Profile_Microservice["Profile"]
+        Api_Client["Api_Client<br/>single-flight token refresh"]
+    end
+
+    subgraph Rest_Boundary["Layer 2 - REST boundary: Pure Java 21 (com.sun.net.httpserver, no Spring) - 71 routes"]
+        direction LR
+        Router["Router<br/>71 paths, :id patterns"]
+        Middleware["Middleware<br/>CORS / logging / errors"]
+        Auth_Guard["Auth_Guard<br/>JWT verify + role check"]
+        Rate_Limiter["Rate_Limiter<br/>Bucket4j token buckets<br/>auth 20/min, public-share 30/min"]
+        Thin_Controllers["Thin_Controllers x10"]
+    end
+
+    subgraph Domain_Services["Layer 3 - Domain services"]
+        direction LR
+        Login_Service["Login_Service<br/>passwords, sessions, MFA"]
+        OTP_Service["OTP_Service<br/>hashed 6-digit codes"]
+        Mail_Service["Mail_Service<br/>Brevo email"]
+        StepUp_Service["StepUp_Service<br/>5-min second-factor token"]
+        Document_Service["Document_Service<br/>vault + versions"]
+        Share_Service["Share_Service<br/>guards + OTP gating"]
+        Verify_Service["Verify_Service<br/>pinned proofs"]
+        Folder_Service["Folder_Service"]
+        Admin_Service["Admin_Service"]
+        Org_Service["Org_Service<br/>OTP invites"]
+        Notification_Service["Notification_Service"]
+        Audit_Service["Audit_Service"]
+        Expiry_Scheduler["Expiry_Scheduler<br/>60s tick"]
+    end
+
+    subgraph Data_Layer["Layer 4 - Data and storage"]
+        direction LR
+        Database[("Database: PostgreSQL<br/>15 tables, migrations V01-V11,<br/>constraints + triggers + views<br/>incl. email_otps (V10)")]
+        Encrypted_Vault[("Encrypted_Vault (FileVault)<br/>AES-256-GCM bytes<br/>SHA-256 integrity")]
+    end
+
+    subgraph Support_Libraries["Support libraries (INFRA-2)"]
+        direction LR
+        HikariCP["HikariCP<br/>connection pool"]
+        Caffeine["Caffeine<br/>limiter buckets + document cache"]
+        Dropwizard_Metrics["Dropwizard_Metrics<br/>per-route timers"]
+        Sentry_Spotlight["Sentry_Spotlight<br/>optional tracing (off)"]
+    end
+
+    Presentation_Layer -- "HTTPS / JSON / Bearer JWT / multipart" --> Rest_Boundary
+    Rest_Boundary --> Domain_Services
+    Domain_Services -- "JDBC via HikariCP, PreparedStatement only" --> Data_Layer
+    Login_Service -- "email the 6-digit code" --> Mail_Service
+    OTP_Service -- "store hash only" --> Database
+    Share_Service -- "401 until inbox proves code" --> OTP_Service
+    HikariCP --> Database
