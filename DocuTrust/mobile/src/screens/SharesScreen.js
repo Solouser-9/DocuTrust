@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { palette } from '../core/theme/palette';
 import { spacing } from '../core/theme/spacing';
@@ -34,58 +34,58 @@ export default function SharesScreen({ navigation }) {
   }, [presenter, navigation]);
 
   return (
-    <Screen
-      title="Shares"
-      eyebrow="Sealed links under your control"
-      loading={state.status === 'loading' && !items.length && !incoming.length}
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-    >
-      <SegmentedTabs options={TABS} value={tab} onChange={(v) => presenter.load(v)} style={{ marginBottom: spacing(4) }} />
+      <Screen
+          title="Shares"
+          eyebrow="Sealed links under your control"
+          loading={state.status === 'loading' && !items.length && !incoming.length}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+      >
+        <SegmentedTabs options={TABS} value={tab} onChange={(v) => presenter.load(v)} style={{ marginBottom: spacing(4) }} />
 
-      {tab === 'mine' ? (
-        state.status === 'empty' ? (
-          <EmptyState
-            variant="share"
-            title="No shares yet"
-            message="Share a document with a sealed link — view-only or downloadable, expiring on your terms."
-            actionLabel="Create share"
-            onAction={() => navigation.navigate('CreateShare')}
-          />
+        {tab === 'mine' ? (
+            state.status === 'empty' ? (
+                <EmptyState
+                    variant="share"
+                    title="No shares yet"
+                    message="Share a document with a sealed link — view-only or downloadable, expiring on your terms."
+                    actionLabel="Create share"
+                    onAction={() => navigation.navigate('CreateShare')}
+                />
+            ) : (
+                <View>
+                  {items.map((share) => {
+                    const status = shareStatus(share);
+                    return (
+                        <AppCard key={String(share.id)} onPress={() => navigation.navigate('ShareDetail', { id: share.id })} style={styles.card}>
+                          <View style={styles.cardTop}>
+                            <Text style={styles.title} numberOfLines={1}>{share.documentTitle || share.title || 'Document'}</Text>
+                            <StampBadge status={status} small />
+                          </View>
+                          <Text style={type.caption}>
+                            {share.permission === 'download' ? 'View + download' : 'View only'} · {relativeTime(share.expiresAt)} · {share.viewCount || 0}
+                            {share.maxViews ? `/${share.maxViews}` : ''} views
+                          </Text>
+                        </AppCard>
+                    );
+                  })}
+                  <AppButton label="Create share" variant="amber" onPress={() => navigation.navigate('CreateShare')} style={{ marginTop: spacing(2) }} />
+                </View>
+            )
+        ) : state.status === 'empty' ? (
+            <EmptyState variant="share" title="No incoming shares" message="When someone shares a document directly with you, it appears here." />
         ) : (
-          <View>
-            {items.map((share) => {
-              const status = shareStatus(share);
-              return (
-                <AppCard key={String(share.id)} onPress={() => navigation.navigate('ShareDetail', { id: share.id })} style={styles.card}>
+            incoming.map((share) => (
+                <AppCard key={String(share.id)} style={styles.card}>
                   <View style={styles.cardTop}>
                     <Text style={styles.title} numberOfLines={1}>{share.documentTitle || share.title || 'Document'}</Text>
-                    <StampBadge status={status} small />
+                    <StampBadge status={share.permission === 'download' ? 'approved' : 'info'} label={share.permission === 'download' ? 'Download' : 'View'} small />
                   </View>
-                  <Text style={type.caption}>
-                    {share.permission === 'download' ? 'View + download' : 'View only'} · {relativeTime(share.expiresAt)} · {share.viewCount || 0}
-                    {share.maxViews ? `/${share.maxViews}` : ''} views
-                  </Text>
+                  <Text style={type.caption}>From {share.ownerName || 'a member'} · {relativeTime(share.createdAt)}</Text>
                 </AppCard>
-              );
-            })}
-            <AppButton label="Create share" variant="amber" onPress={() => navigation.navigate('CreateShare')} style={{ marginTop: spacing(2) }} />
-          </View>
-        )
-      ) : state.status === 'empty' ? (
-        <EmptyState variant="share" title="No incoming shares" message="When someone shares a document directly with you, it appears here." />
-      ) : (
-        incoming.map((share) => (
-          <AppCard key={String(share.id)} style={styles.card}>
-            <View style={styles.cardTop}>
-              <Text style={styles.title} numberOfLines={1}>{share.documentTitle || share.title || 'Document'}</Text>
-              <StampBadge status={share.permission === 'download' ? 'approved' : 'info'} label={share.permission === 'download' ? 'Download' : 'View'} small />
-            </View>
-            <Text style={type.caption}>From {share.ownerName || 'a member'} · {relativeTime(share.createdAt)}</Text>
-          </AppCard>
-        ))
-      )}
-    </Screen>
+            ))
+        )}
+      </Screen>
   );
 }
 
