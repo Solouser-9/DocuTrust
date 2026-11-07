@@ -64,3 +64,6 @@ logs/
 tmp/
 .tmp/
 
+# ---- Local Vault Data (Encrypted Files) ----
+data/
+server/data/
