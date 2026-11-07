@@ -1,0 +1,153 @@
+%% DocuTrust ER diagram (Mermaid source) - 15 tables (V11)
+erDiagram
+    ORGANISATIONS ||--o{ USERS : "has members"
+    USERS ||--o{ REFRESH_TOKENS : "sessions"
+    USERS ||--o| SETTINGS : "preferences"
+    USERS ||--o{ PASSWORD_RESETS : "verify-email tokens"
+    USERS ||--o{ EMAIL_OTPS : "one-time codes"
+    USERS ||--o{ FOLDERS : "owns"
+    USERS ||--o{ DOCUMENTS : "owns"
+    FOLDERS ||--o{ DOCUMENTS : "contains"
+    DOCUMENTS ||--o{ DOCUMENT_VERSIONS : "versioned by"
+    DOCUMENTS ||--o{ DOCUMENT_HISTORY : "audited in"
+    DOCUMENTS ||--o{ SHARES : "shared via"
+    SHARES ||--o{ EMAIL_OTPS : "gates access codes"
+    DOCUMENTS ||--o{ VERIFICATION_REQUESTS : "proven by"
+    DOCUMENT_VERSIONS ||--o{ VERIFICATION_REQUESTS : "pins (F-4, V09)"
+    USERS ||--o{ NOTIFICATIONS : "receives"
+    USERS ||--o{ AUDIT_LOGS : "acts in"
+    USERS ||--o{ ADMIN_REVIEWS : "reviews"
+
+    ORGANISATIONS {
+        uuid id PK
+        varchar name
+        varchar plan "free|team|enterprise"
+    }
+    USERS {
+        uuid id PK
+        uuid org_id FK "SET NULL"
+        varchar email UK
+        varchar password_hash "pbkdf2"
+        varchar role "admin|org_manager|member"
+        varchar status "pending|active|suspended"
+        boolean mfa_enabled
+    }
+    REFRESH_TOKENS {
+        uuid id PK
+        uuid user_id FK
+        varchar token_hash UK "sha-256"
+        timestamptz expires_at
+        timestamptz revoked_at
+        uuid replaced_by
+    }
+    PASSWORD_RESETS {
+        uuid id PK
+        uuid user_id FK
+        varchar code_hash
+        timestamptz expires_at "verify-email tokens only"
+    }
+    EMAIL_OTPS {
+        uuid id PK
+        uuid user_id FK "nullable - share recipients"
+        uuid share_id FK "nullable - share-access codes"
+        varchar recipient_email "target inbox (lowercase)"
+        varchar purpose "password_reset|mfa_login|step_up|share_access|org_invite"
+        varchar otp_hash "sha256 over purpose, email and code"
+        timestamptz expires_at "10 min, invites 24 h"
+        timestamptz used_at "single use"
+        int attempts "burn at 5"
+    }
+    SETTINGS {
+        uuid user_id PK "also FK - 1:1 with users"
+        boolean expiry_alerts
+        int reminder_offset_days "1..90"
+    }
+    FOLDERS {
+        uuid id PK
+        uuid owner_id FK
+        uuid parent_id FK "self"
+        varchar name "UK(owner,parent,name)"
+    }
+    DOCUMENTS {
+        uuid id PK
+        uuid owner_id FK
+        uuid folder_id FK "SET NULL"
+        varchar title
+        varchar doc_type "10 types"
+        varchar status "6-state lifecycle"
+        varchar review_status "admin gate"
+        date expires_at
+        int reminder_days
+        char_64 sha256
+        int current_version
+        timestamptz deleted_at "soft delete"
+    }
+    DOCUMENT_VERSIONS {
+        uuid id PK
+        uuid document_id FK
+        int version_number "UK with doc id"
+        varchar storage_key "vault path"
+        char_64 sha256
+        bigint file_size
+    }
+    DOCUMENT_HISTORY {
+        bigint id PK
+        uuid document_id FK
+        uuid actor_id FK
+        varchar action
+        jsonb detail
+        varchar ip "APPEND-ONLY trigger"
+    }
+    SHARES {
+        uuid id PK
+        uuid document_id FK
+        uuid owner_id FK
+        uuid shared_with_user_id FK "nullable"
+        varchar link_token UK "43 chars, XOR user"
+        varchar permission "view|download"
+        int max_views
+        int view_count "atomic"
+        varchar passcode_hash
+        boolean require_otp "V11 - 401 until inbox proves code"
+        varchar otp_recipient_email "V11 - the only inbox the code goes to"
+        timestamptz expires_at
+        timestamptz revoked_at
+    }
+    VERIFICATION_REQUESTS {
+        uuid id PK
+        uuid document_id FK
+        uuid requester_id FK
+        uuid version_id FK "SET NULL - pinned version (V09)"
+        varchar verifier_name
+        varchar token UK
+        varchar status "pending|approved|..."
+        varchar result "valid|tampered|..."
+        jsonb requested_fields
+        timestamptz expires_at
+    }
+    NOTIFICATIONS {
+        bigint id PK
+        uuid user_id FK
+        varchar type
+        varchar title
+        varchar entity_type
+        uuid entity_id
+        timestamptz read_at
+    }
+    ADMIN_REVIEWS {
+        uuid id PK
+        varchar target_type "document|user|verification"
+        uuid target_id "polymorphic"
+        uuid reviewer_id FK
+        varchar status
+        varchar decision_note
+    }
+    AUDIT_LOGS {
+        bigint id PK
+        uuid actor_id FK
+        varchar action
+        varchar entity_type
+        uuid entity_id
+        varchar ip
+        jsonb meta "APPEND-ONLY trigger"
+    }

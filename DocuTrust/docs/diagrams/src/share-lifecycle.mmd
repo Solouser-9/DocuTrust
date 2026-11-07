@@ -1,0 +1,36 @@
+%% DocuTrust share link lifecycle (Mermaid source) - includes the Phase 5 OTP gate
+stateDiagram-v2
+    [*] --> Created : owner mints share\npermission view|download\nexpiresAt, maxViews?, passcode?\nrequireOtp? + recipientEmail (V11)
+    Created --> Active : link_token issued (43 chars)\npasscode PBKDF2-hashed
+    Created --> OTP_Locked : require_otp = true\n(V11 migration)
+
+    OTP_Locked --> OTP_Locked : plain open -> 401 SHARE_OTP_REQUIRED\nrequest-otp emails the pinned inbox only\nwrong recipient -> 403 (no leak)
+    OTP_Locked --> Active : open-with-otp succeeds\nemailed code verified (single use)\n+ passcode check -> atomic open
+
+    Active --> Active : public open\natomic UPDATE view_count = view_count + 1\nWHERE not revoked AND not expired AND under max_views
+    Active --> Expired : expires_at passed\nHTTP 410 GONE
+    Active --> Revoked : owner revokes (instant)\nHTTP 409 SHARE_REVOKED
+    Active --> Exhausted : view_count = max_views\nHTTP 409 SHARE_MAX_VIEWS
+    Active --> Blocked : document deleted (410 GONE)\nor pending_review (403)
+
+    Expired --> [*]
+    Revoked --> [*]
+    Exhausted --> [*]
+    Blocked --> [*]
+
+    note right of OTP_Locked
+        OTP gate (Phase 5):
+        each open costs one emailed code -
+        the code is single-use and burned at 5
+        wrong attempts; the API never reveals
+        the designated recipient address
+    end note
+
+    note right of Active
+        download permission requires a
+        single-use 5-minute ticket
+        (/api/public/download/:ticket)
+        archived documents (rejected review):
+        existing links stay usable -
+        only hard delete kills a link
+    end note
