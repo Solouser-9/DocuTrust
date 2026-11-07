@@ -15,6 +15,9 @@ WORKDIR /app
 # Create a non-root user
 RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 
+# FIX: Create the data/vault directories and give appuser ownership of /app
+RUN mkdir -p /app/data/vault && chown -R appuser:appgroup /app
+
 # Copy the built jar
 COPY --from=build --chown=appuser:appgroup /app/target/docutrust-server.jar app.jar
 
