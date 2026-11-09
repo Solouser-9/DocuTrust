@@ -5,6 +5,7 @@
     "description": "Secure document vault and verification platform",
     "version": "1.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "scheme": "docutrust",
     "userInterfaceStyle": "light",
     "backgroundColor": "#F7F3EA",
@@ -13,12 +14,25 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "app.docutrust.mobile"
+      "package": "app.docutrust.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#F7F3EA"
+      }
     },
     "plugins": [
       "expo-document-picker",
       "expo-status-bar",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F3EA"
+        }
+      ]
     ],
     "web": {
       "bundler": "metro",
