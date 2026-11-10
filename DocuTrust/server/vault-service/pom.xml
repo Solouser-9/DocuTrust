@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.docutrust</groupId>
+    <artifactId>docutrust-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>docutrust-vault-service</artifactId>
+  <packaging>jar</packaging>
+  <name>DocuTrust Vault Service</name>
+  <description>Phase 1 stub (port 8082): GET /health only. Documents/folders/shares/verification routes arrive in a later phase. Note: ExpiryScheduler (documents + verification expiry) must run on exactly one JVM once extracted.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.docutrust</groupId>
+      <artifactId>docutrust-shared</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>docutrust-vault-service</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>com.docutrust.vaultservice.Main</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

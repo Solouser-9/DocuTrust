@@ -5,100 +5,100 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.docutrust</groupId>
-  <artifactId>docutrust-server</artifactId>
+  <artifactId>docutrust-parent</artifactId>
   <version>1.0.0</version>
-  <packaging>jar</packaging>
-  <name>DocuTrust Server</name>
-  <description>Pure Java 21 backend for DocuTrust - no frameworks, no JUnit.</description>
+  <packaging>pom</packaging>
+  <name>DocuTrust Parent</name>
+  <description>Pure Java 21 backend for DocuTrust - no frameworks, no JUnit. Phase 1: shared library + core-service (the monolith, all 74 routes) + three service stubs + gateway stub. Package names stay com.docutrust.*; only physical file locations moved.</description>
+
+  <modules>
+    <module>shared</module>
+    <module>core-service</module>
+    <module>auth-service</module>
+    <module>vault-service</module>
+    <module>admin-service</module>
+    <module>gateway</module>
+  </modules>
 
   <properties>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
-  <dependencies>
-    <!-- Bumped to 42.7.14 to patch CVEs -->
-    <dependency>
-      <groupId>org.postgresql</groupId>
-      <artifactId>postgresql</artifactId>
-      <version>42.7.14</version>
-    </dependency>
+  <dependencyManagement>
+    <dependencies>
+      <!-- Bumped to 42.7.14 to patch CVEs -->
+      <dependency>
+        <groupId>org.postgresql</groupId>
+        <artifactId>postgresql</artifactId>
+        <version>42.7.14</version>
+      </dependency>
 
-    <!-- INFRA-2: connection pooling, rate limiting, caching, metrics, optional telemetry -->
-    <dependency>
-      <groupId>com.zaxxer</groupId>
-      <artifactId>HikariCP</artifactId>
-      <version>5.1.0</version>
-    </dependency>
-    <dependency>
-      <groupId>com.bucket4j</groupId>
-      <artifactId>bucket4j-core</artifactId>
-      <version>8.10.1</version>
-    </dependency>
-    <dependency>
-      <groupId>com.github.ben-manes.caffeine</groupId>
-      <artifactId>caffeine</artifactId>
-      <version>3.1.8</version>
-    </dependency>
-    <dependency>
-      <groupId>io.dropwizard.metrics</groupId>
-      <artifactId>metrics-core</artifactId>
-      <version>4.2.25</version>
-    </dependency>
-    <dependency>
-      <groupId>io.sentry</groupId>
-      <artifactId>sentry</artifactId>
-      <version>7.14.0</version>
-    </dependency>
+      <!-- INFRA-2: connection pooling, rate limiting, caching, metrics, optional telemetry -->
+      <dependency>
+        <groupId>com.zaxxer</groupId>
+        <artifactId>HikariCP</artifactId>
+        <version>5.1.0</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j-core</artifactId>
+        <version>8.10.1</version>
+      </dependency>
+      <dependency>
+        <groupId>com.github.ben-manes.caffeine</groupId>
+        <artifactId>caffeine</artifactId>
+        <version>3.1.8</version>
+      </dependency>
+      <dependency>
+        <groupId>io.dropwizard.metrics</groupId>
+        <artifactId>metrics-core</artifactId>
+        <version>4.2.25</version>
+      </dependency>
+      <dependency>
+        <groupId>io.sentry</groupId>
+        <artifactId>sentry</artifactId>
+        <version>7.14.0</version>
+      </dependency>
 
-    <!-- SLF4J: Removed slf4j-nop so simple logging actually works -->
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-      <version>2.0.13</version>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-simple</artifactId>
-      <version>2.0.13</version>
-    </dependency>
-  </dependencies>
+      <!-- SLF4J: Removed slf4j-nop so simple logging actually works -->
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>2.0.13</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>2.0.13</version>
+      </dependency>
+
+      <!-- Internal: shared library consumed by core-service and the future service extractions -->
+      <dependency>
+        <groupId>com.docutrust</groupId>
+        <artifactId>docutrust-shared</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <build>
-    <finalName>docutrust-server</finalName>
-    <plugins>
-      <!-- Exec plugin for local development -->
-      <plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>3.1.0</version>
-        <configuration>
-          <mainClass>com.docutrust.Main</mainClass>
-        </configuration>
-      </plugin>
+    <pluginManagement>
+      <plugins>
+        <!-- Exec plugin for local development -->
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>exec-maven-plugin</artifactId>
+          <version>3.1.0</version>
+        </plugin>
 
-      <!-- Shade plugin for production (bundles all dependencies into one runnable jar) -->
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>3.5.1</version>
-        <executions>
-          <execution>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.docutrust.Main</mainClass>
-                </transformer>
-              </transformers>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-    </plugins>
+        <!-- Shade plugin for production (bundles all dependencies into one runnable jar) -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>3.5.1</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
   </build>
 </project>

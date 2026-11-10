@@ -1,12 +1,12 @@
-# Stage 1: Build the application
+# Stage 1: Build the application (Phase 1 multi-module reactor)
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copy only the server files needed for the build
-COPY DocuTrust/server/pom.xml .
-COPY DocuTrust/server/src ./src
+# Copy the multi-module server tree (parent + shared + core-service + service stubs + gateway)
+COPY DocuTrust/server ./server
 
-RUN mvn clean package -DskipTests
+# Build core-service and its reactor dependencies (-am builds shared first)
+RUN cd server && mvn clean package -pl core-service -am -DskipTests -q
 
 # Stage 2: Run the application
 FROM eclipse-temurin:21-jre
@@ -18,8 +18,8 @@ RUN groupadd -r appgroup && useradd -r -g appgroup appuser
 # FIX: Create the data/vault directories and give appuser ownership of /app
 RUN mkdir -p /app/data/vault && chown -R appuser:appgroup /app
 
-# Copy the built jar
-COPY --from=build --chown=appuser:appgroup /app/target/docutrust-server.jar app.jar
+# Copy the built core-service shaded jar
+COPY --from=build --chown=appuser:appgroup /app/server/core-service/target/docutrust-core-service.jar app.jar
 
 # Copy the database migrations folder
 COPY --chown=appuser:appgroup DocuTrust/database ./database

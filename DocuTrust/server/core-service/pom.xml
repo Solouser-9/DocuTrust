@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.docutrust</groupId>
+    <artifactId>docutrust-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>docutrust-core-service</artifactId>
+  <packaging>jar</packaging>
+  <name>DocuTrust Core Service</name>
+  <description>The original monolith renamed. Phase 1: serves ALL 74 routes (nothing extracted yet). ExpiryScheduler runs here - it must run on exactly one JVM. See core-service/README.md.</description>
+
+  <!-- MIGRATOR_ENABLED defaults to true in Config (preserves today's unconditional,
+       idempotent Migrator.apply). This property documents the intent for core-service;
+       the effective value at runtime comes from the environment (MIGRATOR_ENABLED). -->
+  <properties>
+    <MIGRATOR_ENABLED>true</MIGRATOR_ENABLED>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.docutrust</groupId>
+      <artifactId>docutrust-shared</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>docutrust-core-service</finalName>
+    <plugins>
+      <!-- Exec plugin for local development: run from server/ so the MIGRATIONS_DIR
+           default (../database/migrations) and VAULT_DIR (./data/vault) resolve as before.
+           Example: PORT=9000 MIGRATOR_ENABLED=true mvn -pl core-service exec:java -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>com.docutrust.Main</mainClass>
+        </configuration>
+      </plugin>
+
+      <!-- Shade plugin for production (bundles all dependencies into one runnable jar) -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>com.docutrust.Main</mainClass>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

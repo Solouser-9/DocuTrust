@@ -13,6 +13,8 @@ public final class Config {
     public final int port;
     public final String dbUrl, dbUser, dbPassword, jwtSecret, vaultKey, vaultDir, corsOrigin, migrationsDir, dbSchema;
     public final boolean seedDemo;
+    public final int dbPoolMax;
+    public final boolean migratorEnabled;
     // OTP mail delivery (Brevo) + optional Sentry Spotlight profiling.
     public final String mailMode, brevoApiKey, brevoSenderEmail, brevoSenderName;
     public final boolean spotlightEnabled;
@@ -61,6 +63,12 @@ public final class Config {
             System.err.println("SEED_DEMO=true is only permitted with a localhost database. Demo credentials are in source control.");
             System.exit(1);
         }
+        // Phase 1 multi-module: pool size and the migration gate became configuration concerns.
+        // DB_POOL_MAX default 10 pins the monolith's current pool (Phase 2 drops each DB-touching
+        // service to <= 5 - Neon limits). MIGRATOR_ENABLED default true preserves today's
+        // unconditional, idempotent Migrator.apply on boot.
+        dbPoolMax = Integer.parseInt(getOrDefault("DB_POOL_MAX", "10"));
+        migratorEnabled = !"false".equalsIgnoreCase(getOrDefault("MIGRATOR_ENABLED", "true"));
         mailMode = getOrDefault("MAIL_MODE", "dev");
         brevoApiKey = get("BREVO_API_KEY");
         brevoSenderEmail = get("BREVO_SENDER_EMAIL");
@@ -165,5 +173,10 @@ public final class Config {
     private String getOrDefault(String key, String dflt) {
         String v = get(key);
         return v == null ? dflt : v;
+    }
+
+    /** Public read for shared classes constructed outside Main (e.g. HealthController's MAIL_MODE lookup). */
+    public String get(String key, String dflt) {
+        return getOrDefault(key, dflt);
     }
 }

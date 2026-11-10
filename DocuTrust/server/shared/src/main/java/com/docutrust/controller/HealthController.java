@@ -1,5 +1,6 @@
 package com.docutrust.controller;
 
+import com.docutrust.config.Config;
 import com.docutrust.db.Database;
 import com.docutrust.http.Handler;
 import com.docutrust.util.Json;
@@ -11,8 +12,9 @@ public final class HealthController {
             + "tamper-evident verification links, admin review for sensitive documents and full audit trails.";
 
     private final Database db;
+    private final Config cfg;
 
-    public HealthController(Database db) { this.db = db; }
+    public HealthController(Database db, Config cfg) { this.db = db; this.cfg = cfg; }
 
     public Handler health() {
         return ctx -> ctx.ok(Json.obj("ok", true, "db", db.healthy(),
@@ -37,8 +39,8 @@ public final class HealthController {
                         "mail", mailInfo())));
     }
 
-    private static String mailInfo() {
-        String mode = java.util.Optional.ofNullable(System.getenv("MAIL_MODE")).orElse("dev");
+    private String mailInfo() {
+        String mode = cfg.get("MAIL_MODE", "dev");
         return "live".equalsIgnoreCase(mode) ? "Brevo" : "Brevo (dev mode: X-Dev-OTP)";
     }
 }

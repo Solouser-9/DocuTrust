@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.docutrust</groupId>
+    <artifactId>docutrust-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>docutrust-gateway</artifactId>
+  <packaging>jar</packaging>
+  <name>DocuTrust Gateway</name>
+  <description>Phase 1 stub (port 8080): GET /health only, no database, no dependencies. Reverse-proxy routing to core/auth/vault/admin arrives in a later phase; until then leave the gateway stopped during demos and run core-service with PORT=8080 for the mobile client.</description>
+
+  <build>
+    <finalName>docutrust-gateway</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>com.docutrust.gateway.Main</mainClass>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

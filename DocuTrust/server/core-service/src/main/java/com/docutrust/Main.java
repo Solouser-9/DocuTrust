@@ -104,9 +104,14 @@ public final class Main {
             }
             initSql = "SET search_path TO " + schema + ", public";
         }
-        Database db = new Database(cfg.dbUrl, cfg.dbUser, cfg.dbPassword, 2, 10, initSql);
-        List<String> migrations = Migrator.apply(db, cfg.migrationsDir);
-        System.out.println("[main] migrations applied: " + migrations.size());
+        Database db = new Database(cfg.dbUrl, cfg.dbUser, cfg.dbPassword, 2, cfg.dbPoolMax, initSql);
+        List<String> migrations = List.of();
+        if (cfg.migratorEnabled) {
+            migrations = Migrator.apply(db, cfg.migrationsDir);
+            System.out.println("[main] migrations applied: " + migrations.size());
+        } else {
+            System.out.println("[main] migrations skipped (MIGRATOR_ENABLED=false)");
+        }
 
         FileVault vault = new FileVault(Path.of(cfg.vaultDir), vaultKeyBytes(cfg.vaultKey));
         PasswordService passwords = new PasswordService();
@@ -140,7 +145,7 @@ public final class Main {
         NotificationController notifC = new NotificationController(notifications, settings);
         AdminController adminC = new AdminController(admin);
         OrgController orgC = new OrgController(org);
-        HealthController healthC = new HealthController(db);
+        HealthController healthC = new HealthController(db, cfg);
 
         // ---- public: health & meta ----
         router.publicRoute("GET", "/api/health", healthC.health());
