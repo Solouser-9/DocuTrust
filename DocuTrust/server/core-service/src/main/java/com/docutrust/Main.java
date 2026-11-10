@@ -7,14 +7,12 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 import com.docutrust.auth.JwtService;
-import com.docutrust.auth.MfaService;
 import com.docutrust.auth.PasswordService;
 import com.docutrust.auth.RateLimiter;
 import com.docutrust.auth.TokenService;
 import com.docutrust.bootstrap.Bootstrap;
 import com.docutrust.config.Config;
 import com.docutrust.controller.AdminController;
-import com.docutrust.controller.AuthController;
 import com.docutrust.controller.DocumentController;
 import com.docutrust.controller.FolderController;
 import com.docutrust.controller.HealthController;
@@ -29,7 +27,6 @@ import com.docutrust.http.Middleware;
 import com.docutrust.http.Router;
 import com.docutrust.service.AdminService;
 import com.docutrust.service.AuditService;
-import com.docutrust.service.AuthService;
 import com.docutrust.service.DocumentService;
 import com.docutrust.service.ExpiryScheduler;
 import com.docutrust.service.FolderService;
@@ -115,7 +112,6 @@ public final class Main {
 
         FileVault vault = new FileVault(Path.of(cfg.vaultDir), vaultKeyBytes(cfg.vaultKey));
         PasswordService passwords = new PasswordService();
-        MfaService mfa = new MfaService();
         JwtService jwt = new JwtService(cfg.jwtSecret);
         RateLimiter limiter = new RateLimiter();
         TokenService tokens = new TokenService(db, jwt);
@@ -128,7 +124,6 @@ public final class Main {
         OtpService otps = new OtpService();
         StepUpService stepUps = new StepUpService(db, otps, mail, jwt, audit);
         DocumentService documents = new DocumentService(db, vault, audit, notifications, stepUps);
-        AuthService auth = new AuthService(db, passwords, tokens, mfa, audit, mail, otps, stepUps, jwt, vault, cfg.seedDemo);
         FolderService folders = new FolderService(db, audit, documents);
         ShareService shares = new ShareService(db, passwords, documents, audit, notifications, vault, otps, mail);
         VerifyService verify = new VerifyService(db, vault, audit, documents);
@@ -136,7 +131,6 @@ public final class Main {
         OrgService org = new OrgService(db, passwords, audit, notifications, otps, mail, tokens);
 
         Router router = new Router(cfg, db, mw);
-        AuthController authC = new AuthController(auth, stepUps, mail);
         DocumentController docC = new DocumentController(documents);
         FolderController folderC = new FolderController(folders);
         ShareController shareC = new ShareController(shares);
@@ -152,27 +146,8 @@ public final class Main {
         router.publicRoute("GET", "/api/meta", healthC.meta());
 
         // ---- public: auth (login/register/forgot/reset rate limited) ----
-        router.rateLimited("POST", "/api/auth/register", "auth", authC.register());
-        router.rateLimited("POST", "/api/auth/login", "auth", authC.login());
-        router.rateLimited("POST", "/api/auth/forgot-password", "auth", authC.forgotPassword());
-        router.rateLimited("POST", "/api/auth/reset-password-otp", "auth", authC.resetPasswordOtp());
-        router.rateLimited("POST", "/api/auth/verify-otp", "auth", authC.verifyOtp());
+        // RC-1: accept-invite stays in core-service. Handler is OrgController.acceptInvite (admin-domain logic under auth prefix).
         router.rateLimited("POST", "/api/auth/accept-invite", "auth", orgC.acceptInvite());
-        router.publicRoute("POST", "/api/auth/refresh", authC.refresh());
-        router.publicRoute("POST", "/api/auth/logout", authC.logout());
-        router.publicRoute("GET", "/api/auth/verify-email", authC.verifyEmail());
-
-        // ---- auth ----
-        router.auth("GET", "/api/auth/me", authC.me());
-        router.auth("PATCH", "/api/auth/me", authC.updateMe());
-        router.auth("GET", "/api/auth/sessions", authC.sessions());
-        router.auth("DELETE", "/api/auth/sessions/:id", authC.revokeSession());
-        router.auth("POST", "/api/auth/change-password", authC.changePassword());
-        router.auth("POST", "/api/auth/request-step-up", authC.requestStepUp());
-        router.auth("POST", "/api/auth/verify-step-up", authC.verifyStepUp());
-        router.auth("POST", "/api/auth/mfa/setup", authC.mfaSetup());
-        router.auth("POST", "/api/auth/mfa/enable", authC.mfaEnable());
-        router.auth("POST", "/api/auth/mfa/disable", authC.mfaDisable());
 
         // ---- documents ----
         router.auth("GET", "/api/documents", docC.list());
