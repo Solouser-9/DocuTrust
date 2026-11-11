@@ -3,25 +3,20 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-
   <parent>
     <groupId>com.docutrust</groupId>
     <artifactId>docutrust-parent</artifactId>
     <version>1.0.0</version>
   </parent>
-
   <artifactId>docutrust-auth-service</artifactId>
   <packaging>jar</packaging>
   <name>DocuTrust Auth Service</name>
-  <description>Phase 1 stub (port 8081): GET /health only. Auth/MFA/OTP/session routes arrive in Phase 2 when AuthController + AuthService + MfaService extract from core-service (excluding /api/auth/accept-invite per RC-1, which stays in core-service).</description>
-
   <dependencies>
     <dependency>
       <groupId>com.docutrust</groupId>
       <artifactId>docutrust-shared</artifactId>
     </dependency>
   </dependencies>
-
   <build>
     <finalName>docutrust-auth-service</finalName>
     <plugins>
@@ -31,6 +26,24 @@
         <configuration>
           <mainClass>com.docutrust.authservice.Main</mainClass>
         </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>com.docutrust.authservice.Main</mainClass>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>
