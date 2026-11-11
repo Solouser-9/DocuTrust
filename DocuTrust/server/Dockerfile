@@ -25,4 +25,4 @@ USER appuser
 EXPOSE 8080
 
 # Start Core on 9000, Auth on 8081, and Gateway on Render's injected PORT (or 8080)
-CMD ["sh", "-c", "PORT=9000 MIGRATOR_ENABLED=true DB_POOL_MAX=5 java -jar core.jar & PORT=8081 DB_POOL_MAX=5 java -jar auth.jar & PORT=${PORT:-8080} java -jar gateway.jar"]
+CMD ["sh", "-c", "PORT=9000 MIGRATOR_ENABLED=true MIGRATIONS_DIR=/app/database/migrations DB_POOL_MAX=5 java -jar core.jar & PORT=8081 DB_POOL_MAX=5 java -jar auth.jar & PORT=${PORT:-8080} java -jar gateway.jar"]
