@@ -50,3 +50,15 @@ Rule of thumb: each student owns one backend module + its screens + its docs (ve
 ## Post-submission hardening note
 
 After the original submission, a pre-production security audit produced three fix batches (config fail-closed hardening; session/token lifecycle surgery; final cleanup). Code-facing results visible in this tree: migrations now run **V01–V09** (V09 adds `verification_requests.version_id` — proof links are pinned to the exact version minted, and the public verify page flags superseded proofs), the registered route count is **65** (`reset-password` now registered and rate-limited), transactions are single-level, and the docs (`FEATURES.md`, `API_CONTRACTS.md`, diagrams) were re-synced to the shipped code. The sprint tables above are kept as the historical plan.
+
+## Post-graduation microservices refactor (Phases 1–3, the Strangler Fig)
+
+After the audit, the monolith was refactored into microservices using the **Strangler Fig** pattern — a new front desk (gateway) grows around the old tree and takes over entrances one branch at a time, while the mobile app keeps pointing at the same address (`:8080`) and never notices. Three phases, three verifiable states:
+
+| Phase | What happened | Verify it |
+|---|---|---|
+| **Phase 1 — modularisation** | The single module became a Maven reactor: `shared` (http stack, config, db, auth, vault) + `core-service` (all 74 routes, port 9000) + four stubs (auth, vault, admin, gateway) | `mvn clean install` → 6/6 modules |
+| **Phase 2 — auth extraction** | The 18 `/api/auth/*` routes moved to **auth-service** (:8081) — 4 files moved byte-identical, core left with 56 routes + the RC-1 exception: `POST /api/auth/accept-invite` deliberately **stays in core** (admin-domain org logic under an auth prefix). Shared `JWT_SECRET` → cross-service JWT validation; auth never runs migrations | core boots `routes=56`, auth boots `routes=19` |
+| **Phase 3 — the gateway** | `gateway` (:8080) became a real pure-JDK reverse proxy: RC-1 exact-match → core, `/api/auth/*` → auth, everything else → core; forwards method/raw path/raw query/headers/body byte-for-byte, recomputes `X-Forwarded-For`, answers **502 BAD_GATEWAY** when a service is down | login on :8080 works, documents on :8080 work, stop auth → 502 |
+
+**Deployment shape:** both DB-touching services share **one Neon PostgreSQL** (free-tier RAM limits rule out per-service databases; one DB keeps transactions ACID) with `DB_POOL_MAX ≤ 5` each, core alone migrates/schedules/seeds, and `server/Dockerfile` + the root `docker-compose.yml` boot the whole campus with one command.

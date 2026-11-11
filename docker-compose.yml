@@ -1,0 +1,78 @@
+# DocuTrust — the whole campus in one command (repo root, next to this file):
+#
+#     cp DocuTrust/server/.env.example .env    # fill in DB_URL, DB_USER, DB_PASSWORD,
+#                                              # JWT_SECRET (32+ chars), VAULT_KEY (44-char b64)
+#     docker compose up --build
+#
+# The mobile app points at the GATEWAY only: http://localhost:8080
+# (auth-service :8081 and core-service :9000 are also published locally for debugging
+# and direct-access demos — nothing else needs them).
+#
+# Beginner's map: gateway = the receptionist at the front desk (8080); auth-service =
+# the bouncer who prints the ID cards (8081); core-service = the vault room (9000).
+# Both working buildings share ONE database (Neon PostgreSQL) and ONE encrypted vault
+# volume — that shared state is what makes cross-service JWT validation and MFA
+# secret decryption work.
+
+name: docutrust
+
+services:
+
+  # ---------------------------------------------------------------- the vault room
+  core-service:
+    build:
+      context: .
+      dockerfile: DocuTrust/server/Dockerfile
+      target: core
+    env_file:
+      - .env                     # DB_URL, DB_USER, DB_PASSWORD, JWT_SECRET, VAULT_KEY, MAIL_MODE, ...
+    environment:
+      PORT: "9000"
+      MIGRATOR_ENABLED: "true"   # core-service is the ONLY migrator — migrations run exactly once
+      SEED_DEMO: "false"         # the server refuses to seed a non-localhost database (Neon) anyway
+      DB_POOL_MAX: "5"           # small pools per service fit Neon's free-tier connection budget
+      MIGRATIONS_DIR: /app/database/migrations
+      VAULT_DIR: /app/data/vault
+    volumes:
+      - vault-data:/app/data/vault   # the ONE safe — shared with auth-service for MFA secrets
+    ports:
+      - "9000:9000"              # direct-access demos; the app itself never needs this
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- the bouncer
+  auth-service:
+    build:
+      context: .
+      dockerfile: DocuTrust/server/Dockerfile
+      target: auth
+    env_file:
+      - .env                     # same secrets as core-service — REQUIRED for cross-service JWT validation
+    environment:
+      PORT: "8081"
+      DB_POOL_MAX: "5"
+      VAULT_DIR: /app/data/vault
+    volumes:
+      - vault-data:/app/data/vault   # same vault volume: MFA secrets encrypted by core, decrypted by auth
+    ports:
+      - "8081:8081"              # direct-access demos; the app itself never needs this
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- the receptionist
+  gateway:
+    build:
+      context: .
+      dockerfile: DocuTrust/server/Dockerfile
+      target: gateway
+    environment:
+      PORT: "8080"
+      CORE_URL: http://core-service:9000   # routing rule 1 (RC-1 accept-invite) + rule 3 (everything else)
+      AUTH_URL: http://auth-service:8081   # routing rule 2 (/api/auth/* prefix)
+    ports:
+      - "8080:8080"              # THE only address the mobile app needs (EXPO_PUBLIC_API_URL)
+    depends_on:
+      - core-service
+      - auth-service
+    restart: unless-stopped
+
+volumes:
+  vault-data:

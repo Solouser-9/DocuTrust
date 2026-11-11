@@ -21,10 +21,11 @@ This file is the complete rehearsal brief for the student presenting **Student 1
 
 **My numbers:**
 
-- **74 API routes** — registered in `Main.start`, printed at boot as `routes=74`
-- **15 database tables** — built by migrations V01–V12 (plus `schema_migrations`, the migration runner's own clipboard, which is not one of ours)
+- **74 logical API routes across two services** — 56 registered in core-service's `Main.start` (`routes=56`, incl. the RC-1 `accept-invite`), 19 in auth-service (`routes=19`); each service prints its own count at boot
+- **3 runnable services** — gateway :8080 (pure JDK reverse proxy), auth-service :8081, core-service :9000; the identical platform skeleton (Router → Middleware → Ctx) runs inside both working services
+- **15 database tables — one shared database (Neon)** — built by migrations V01–V12 (plus `schema_migrations`, the migration runner's own clipboard, which is not one of ours); core-service is the only migrator (auth's is hardcoded off)
 - **12 migrations** — one numbered SQL file each in `database/migrations/`
-- **1 runnable jar** — `mvn clean package` packs the whole server into the self-contained `docutrust-server.jar`
+- **3 runnable jars** — `mvn clean install` packs `docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar`
 - **216 numbered features + the post-audit addendum (FT-217–FT-234)** in `docs/FEATURES.md`; my slice covers the Server Platform module FT-193–FT-208
 - **3 roles** — `admin` > `org_manager` > `member`, enforced in `Middleware.requireRole`
 - Connection pool: **min 2 idle, max 10 connections**, 10-second connection timeout, 30-minute max connection lifetime (HikariCP)
@@ -40,7 +41,7 @@ This file is the complete rehearsal brief for the student presenting **Student 1
 
 ## Elevator pitch (≈ 1 minute)
 
-> "I built the skeleton everything else hangs on. DocuTrust's server is pure Java 21 on the JDK's built-in HTTP server — no Spring — so every request is matched by a hand-written router with 74 registered routes, then passes through a middleware chain: CORS, logging, JWT authentication, role guards and rate limiting. Underneath, HikariCP manages the database pool, and the schema itself does security work: fifteen tables with CHECK constraints, foreign keys, and append-only triggers so that even a database console cannot rewrite an audit trail. My proof is simple: the boot log prints `migrations=12, routes=74`, and `mvn clean package` turns a clean clone into the runnable jar in one command."
+> "I built the skeleton everything else hangs on — and since the microservices refactor, that skeleton runs in three processes. DocuTrust's backend is pure Java 21 on the JDK's built-in HTTP server — no Spring — and every request is still matched by my hand-written router and passes through the same middleware chain: CORS, logging, JWT authentication, role guards and rate limiting. The chain lives in the shared module and runs identically inside core-service (56 routes) and auth-service (19 routes), in front of a **single shared Neon database** with one schema doing security work: fifteen tables with CHECK constraints, foreign keys, and append-only triggers so that even a database console cannot rewrite an audit trail. Each service gets its own small HikariCP pool (≤ 5 connections — sized for Neon's free tier), and exactly one service migrates. My proof is simple: the boot logs print `migrations=12, routes=56` and `routes=19`, `mvn clean install` builds the three jars in one command, and the gateway's banner names both upstreams — my routers are what sits behind it."
 
 *Then demo:* run one request live against the local server (a `GET /api/admin/stats` with an admin token) and show the console line `[http] GET /api/admin/stats -> 200 (... ms)` appear as it is served; then open the SQL editor and run a manual `UPDATE` against `audit_logs` so the audience watches PostgreSQL itself throw the append-only exception. The numbers on screen — `migrations=12, routes=74` — come from the boot log of `Main.start`, so the claim checks itself.
 
@@ -152,7 +153,7 @@ The first cache is entirely mine (it is the rate limiter's memory); the second s
 
 1. **HikariCP is a restaurant host.** Guests (database queries) don't wait for a free table to be built; a host keeps a fixed set of tables ready and seats the next guest at whichever frees up first. Before HikariCP we hand-wrote that seating logic; now it's a battle-tested library with the same seats (our code's API didn't change at all).
 2. **Migrations are LEGO instructions in order.** Each numbered file (V01–V12) adds a few bricks — a table here, an index there — and the database is just the sum of the steps. Any team member can rebuild the exact same database from scratch, which is why our ER diagram and our production schema can never drift apart.
-3. **The router is a hotel receptionist.** You say "I'm here for room 12" (`/api/documents/:id`) and the receptionist knows static room numbers take priority over "the room with whatever name" — exact matches win over wildcards. One receptionist, 74 known destinations, and anything unknown gets a clean 404 instead of a crash.
+3. **The gateway is a hotel receptionist; each service is a floor.** You say "I'm here for room 12" (`/api/documents/:id`) and the receptionist walks the request — untouched — to the right floor: identity requests to the security floor (`/api/auth/*` → auth-service), everything else to the vault floor (core-service). One exact room number even breaks the pattern on purpose (`POST /api/auth/accept-invite` → the vault floor, RC-1). The floors themselves each keep their own hand-written floor directory (my Router — 56 and 19 known destinations, static room numbers beating wildcards), and a closed floor gets a clean 502 from the receptionist instead of an endless wait.
 4. **The middleware chain is airport security.** Every passenger walks the same lane before reaching the shops: the passport scan is JWT authentication, the boarding-class check is the role guard, and the queue counter that says "too many people, wait" is the rate limiter. No shop — no controller — is ever reached without passing through the lane first, and the lane's order never changes, which is exactly why it is owned by one person.
 5. **The append-only audit trigger is a cash-register till tape.** The tape only prints new lines; you cannot edit or un-print a line, not even the shop owner can, and at the end of the day the tape is the one thing everyone trusts in a dispute. Our `audit_logs` and `document_history` tables work the same way: the database itself raises an exception if anyone — application, administrator, or a hand-typed SQL command — tries to alter or tear out a line.
 
@@ -210,9 +211,9 @@ The read example above is half the story; a `POST /api/documents` upload walks t
 2. `DocumentService.upload()` (Student 3's feature) runs inside one `db.tx(...)`: the document row, version one, and the first history entry commit together or not at all — one connection, no nesting.
 3. My triggers take over on commit: `trg_documents_history` writes the `created` history row automatically, and `trg_version_sync` mirrors the version's `sha256`, size and mime type onto the document head — the schema doing bookkeeping no Java code has to remember.
 
-### The 74 routes at a glance
+### The 74 routes at a glance — now split across two services
 
-The route count is not a slogan; it is the registration section of `Main.start`, countable line by line:
+The route count is not a slogan; it is the registration section, countable line by line. Since Phase 2 it lives in **two files**: the "public auth" and "authenticated profile & MFA / sessions" rows below are registered in **auth-service's** `Main` (19 routes there, including its own health route), and every other row is registered in **core-service's** `Main` (56 routes, still including the RC-1 `accept-invite`):
 
 | Registration group | How they are registered | Count |
 |---|---|---|
@@ -230,7 +231,7 @@ The route count is not a slogan; it is the registration section of `Main.start`,
 | Notifications & settings | `auth` | 5 |
 | Admin (stats, review queue, review detail, decision, users, status, documents, audit logs) | `role("admin", …)` | 8 |
 | Organisation (members, invite, role change, remove, stats) | `anyRole("admin", "org_manager", …)` | 5 |
-| **Total** | printed by `router.routeCount()` as `routes=74` | **74** |
+| **Total** | `router.routeCount()` printed at each boot — core-service `routes=56`, auth-service `routes=19` (18 auth + its health) | **74 logical** |
 
 ### The schema's guarantees, demonstrated live
 
@@ -248,13 +249,13 @@ Five refusals an examiner can watch the database itself produce, each traceable 
 
 | My claim | Where an examiner verifies it |
 |---|---|
-| `routes=74` | Printed by `Main.start`; counted from the registration block in `Main.java` |
-| `migrations=12` | Printed by `Main.start` (`[main] migrations applied: 12`); eleven files in `database/migrations/` |
-| 15 tables | The CREATE TABLE statements across V01–V05 and V10 |
-| Runnable jar | `mvn clean package` on a clean clone packs `docutrust-server.jar` — the one-command build works from nothing |
-| 3 roles | `Middleware.requireAnyRole` + the CHECK on `users.role` (V01) |
-| Pool 2–10 | The `new Database(..., 2, 10, ...)` call in `Main.start`, configured in `db/Database.java` |
-| 32 threads | `server.setExecutor(Executors.newFixedThreadPool(32))` in `Main.start` |
+| `routes=56` / `routes=19` | Printed by each service's boot (core-service `Main.start`, auth-service `Main`); counted from the two registration blocks |
+| `migrations=12` | Printed by core-service's boot (`[main] migrations applied: 12`); twelve files in `database/migrations/` — auth-service prints `migrations skipped` instead |
+| 15 tables | The CREATE TABLE statements across V01–V05 and V10 — **one shared database** for both services |
+| 3 runnable jars | `mvn clean install` on a clean clone packs `docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar` — the one-command build works from nothing |
+| 3 roles | `Middleware.requireAnyRole` + the CHECK on `users.role` (V01) — the same middleware runs in both services |
+| Pool 2–10 (≤ 5 per service in production) | The `new Database(..., 2, 10, ...)` call in each service's boot, configured in `db/Database.java`; `DB_POOL_MAX` caps it for Neon |
+| 32 threads (core) / 64 (gateway) | `server.setExecutor(Executors.newFixedThreadPool(...))` in each boot |
 | 25 MB cap | `Ctx.MAX_BODY_BYTES` in `http/Ctx.java` |
 
 ### How a fresh database becomes the schema — the `Migrator.apply` loop
@@ -327,6 +328,9 @@ The runner keeps its own clipboard: `Migrator.apply` first creates `schema_migra
 **Q: "Why are the append-only rules database triggers and not just code discipline?"**
 Because the whole point of an audit trail is that it survives the failure of everything above it. `trg_history_immutable` and `trg_audit_immutable` execute `forbid_history_mutation` / `forbid_audit_mutation`, which raise an exception on any UPDATE or DELETE — including from a manual SQL console, a migration, or a future bug. Application discipline is a promise; a trigger is physics. It is also the honest answer to "what if someone with database credentials goes rogue": they can add rows, but they cannot quietly rewrite the past, and attempts are loud, not silent.
 
+**Q: "After the refactor, where does routing actually live — gateway or service?"**
+Both, in a deliberate division of labour. The **gateway** answers one question only: *which building* — RC-1's exact match first, then the `/api/auth/` prefix, then the default; it never inspects roles or bodies. **Inside each service**, my Router still answers *which room* — method + path pattern matching with static-over-param scoring, exactly as before. The two layers never overlap: the gateway forwards byte-for-byte and cannot 404 a known service route, and the services 404 on their own unknown paths. That is why the total menu is unchanged: 74 dishes, one cashier, two floor directories.
+
 **Q: "Why PreparedStatements everywhere, rather than building SQL strings?"**
 Three reasons. Security: the SQL shape is fixed and only values are sent, so a user typing `' OR 1=1 --` into a search box is stored as text, never executed as SQL — the injection simply has nowhere to happen. Correctness: types are bound explicitly (UUIDs as UUIDs, timestamps as timestamps), which kills a whole class of quoting bugs. Performance: the database can reuse a prepared statement's execution plan instead of re-parsing a new string every time. Every query in every service and in the middleware follows this one pattern, so there is no "clever" exception to audit.
 
@@ -353,5 +357,5 @@ The router does, twice. Success responses go through `Ctx.ok`/`created`/`okPage`
 - **If you ask me about encryption, share guards or verification → that's Student 3's area.** My side: their entire business layer rides on my platform — the atomic share-guard `UPDATE` runs inside my `Tx.with` on my HikariCP pool, and their "zero rows moved" reasoning depends on my single-connection transaction rule. The Caffeine read cache they use is a platform library I brought in.
 - **If you ask me about screens, presenters or the API client → that's Student 4's area.** My side: the envelope and status codes their `ApiClient` unwraps are produced by my `Ctx` and `Router`, and the `401 TOKEN_EXPIRED` distinction is the hook their single-flight refresh hangs on. I also own the shell they live in: the `SCREEN_REGISTRY`, `RootNavigator` role stacks and the Dashboard screen.
 - **If you ask me about audit findings or the fix comments → that's Student 5's area.** My side: several of their findings are fixed *in* my files — C-1 (the one-connection transaction hygiene in `Database`/`Tx`), C-2/C-13 (the migration splitter that survives `;` inside comments), E-3 (the weak-secret refusal in `Config`) and D-1 (the 32-byte vault-key format). Their IDs are cited in those files to this day.
-- **If you ask me about builds, configuration, seeding or deployment → that's Student 6's area.** My side: I own *what* the boot does — wire the pool, apply the migrations, register the routes; Student 6 owns *how it is launched, configured and monitored*. Their boot log literally prints my numbers: `migrations=12, routes=74`.
+- **If you ask me about builds, configuration, seeding or deployment → that's Student 6's area.** My side: I own *what* the boot does — wire the pool, apply the migrations, register the routes (in core-service and auth-service alike); Student 6 owns *how it is launched, configured and monitored* — and the gateway that stands in front of both. Their boot logs literally print my numbers: `migrations=12, routes=56` and `routes=19`.
 - **Who most often bridges TO me:** Student 5 — audit findings kept landing in my layer, so their stories start in my files; and Student 3, whose services are the heaviest daily users of my transactions, pool and query mappers. The bridge map in DEFENCE_GUIDE.md routes every schema, pool and router-matching question to this desk.

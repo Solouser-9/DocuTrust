@@ -2,6 +2,8 @@
 
 Every feature has a stable ID (`FT-xxx`) used in the defence pack, commit messages and demo walkthroughs. Modules map 1:1 to frontend microservices.
 
+> **Reading this after the microservices refactor:** every feature below still works exactly as described — its *address* is now the gateway (`:8080`), which silently forwards auth routes to **auth-service (:8081)** and everything else to **core-service (:9000)**. Auth-flavoured features (FT-001…FT-024, the OTP addendum FT-217…FT-234) now physically run in the auth-service codebase; vault/sharing/admin features run in core-service; nothing was removed or renumbered. Think of this list as the menu — the kitchen moved some stoves, the menu did not change.
+
 ## M1 — Authentication & Account Access (FT-001 … FT-024)
 | ID | Feature |
 |----|---------|

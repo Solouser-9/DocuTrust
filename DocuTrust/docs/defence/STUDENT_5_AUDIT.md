@@ -15,6 +15,7 @@ This file is the complete rehearsal brief for **Student 5, who owns the 8-Pass S
 **My numbers:**
 
 - **8 passes, A through H** — access control, crypto and vault, concurrency, configuration, input validation, information leakage, error handling, and data integrity.
+- **74 logical API routes across two services** (core-service 56, auth-service 19) — the audit's ID comments live in both codebases, in the same shared-module files both services compile.
 - **15 finding IDs verifiable in code comments in this shipped tree** — A-3, B-1, B-2, B-3, C-1, C-2, C-7, C-8, C-13, D-1, E-3, F-2, F-4, H-1, H-3 — out of the ledger that spans A-1 … H-3 (see the honest note under the finding table).
 - **3 hardening batches** shipped after the audit, each leaving the tree in a clean-build, bootable state.
 - **Greppable proof** — every finding ID lives in a code comment in this shipped tree: `grep -rn "B-1" server/src/main/java/com/docutrust/auth/TokenService.java` lands on the fix and its story (the live grep index below).
@@ -296,6 +297,10 @@ Because it is fail-open: the control exists, the code path exists, even the inte
 
 **Q: "What did the phantom audit (C-1) actually break?"**
 Trust in our own history. DocuTrust's promise is tamper-evident history — every security-relevant event leaves an append-only row. C-1 meant the history book could record events that never happened: a business operation rolls back, its audit row survives on the second connection. Anyone querying `audit_logs` would be reading fiction. The fix makes one connection the unit of truth; the shipped comments in `ShareService` and `SettingsService` record the rule where it happened, and the phantom can never return because the second-connection overload no longer exists in the tree.
+
+**Q: "Did the microservices refactor break any of your audit guarantees?"**
+
+> No — and I can show why in three moves. The security-critical mechanics all live in the **shared module** both services compile: `TokenService`'s B-1 committed-before-error revocation, E-3/D-1's fail-fast config gates, C-1's single-connection transaction hygiene — moving them into a second service copied their guarantees, not their risks. The database guarantees never moved at all: the append-only triggers, the ownership `WHERE` clauses and the constraint wall are schema-side, and both services write the **one shared database** through the same prepared-statement discipline. The one genuinely new surface — the gateway — was built with the audit's own instincts: it forwards bytes rather than re-interpreting them (nothing to re-validate, nothing to leak), it **recomputes `X-Forwarded-For`** from the live peer so audit rows keep recording the true client IP instead of a proxy address, and it answers `502 BAD_GATEWAY` with the standard error envelope rather than hanging or leaking internals. And the refactor itself followed the audit's house rules: one phase, one verifiable state (build green, boot banners, route counts counted), before the next phase started.
 
 **Q: "You fixed the same reuse bug three ways — B-1, B-2, B-3. Why three?"**
 Because a security action has three independent parts: the effect (revoke the family), the evidence (the audit row), and the race window (concurrent rotations). B-1 makes the effect durable before the error unwinds; B-2 makes the evidence post-commit and best-effort so it can never veto the effect; B-3 closes the race so two simultaneous refreshes cannot both pass the "is it still live?" check. Fixing only B-1 would have left the audit row able to roll the revocation back indirectly, or two racing requests double-issuing tokens. The trio is one correct action.

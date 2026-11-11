@@ -10,10 +10,12 @@ This file is the complete rehearsal brief for the student presenting **Student 6
 
 **Owns:**
 
-- the Maven build (`server/pom.xml`) and the pinned dependency set it declares
+- the Maven build (the module poms under `server/`) and the pinned dependency set it declares
+- **the gateway reverse proxy** (`gateway/`): the three routing rules, byte-for-byte forwarding of method/raw path/raw query/headers/body, the `X-Forwarded-For` rewrite, and the `502 BAD_GATEWAY` envelope
+- **`server/Dockerfile`** (multi-stage, one builder → three runner images: gateway / auth / core) and the root **`docker-compose.yml`** that wires `CORE_URL`/`AUTH_URL` into the gateway, mounts the shared vault volume into both DB-touching services and caps their pools at ≤ 5 for Neon
 - `.env` configuration with fail-fast validation (`config/Config.java`) and both `.env.example` templates (server and mobile)
 - the root `.gitignore` — the fence that keeps secrets, build output and local-only files out of GitHub
-- the demo seeder (`bootstrap/Bootstrap.java`), the `ExpiryScheduler` background job, and the metrics/health endpoints (`infra/Metrics.java`, `controller/HealthController.java`)
+- the demo seeder (`bootstrap/Bootstrap.java`, core-service only), the `ExpiryScheduler` background job (single-JVM contract — core-service only), and the metrics/health endpoints (`infra/Metrics.java`, `controller/HealthController.java`)
 - the optional Sentry Spotlight tracing switch (`infra/Spotlight.java`) and the graceful shutdown path (`Main.App.stop`)
 - the `refresh_tokens` session schema already includes the device/IP metadata in V01, so the Active Sessions list is built on a schema that already supports the feature
 
@@ -21,18 +23,18 @@ This file is the complete rehearsal brief for the student presenting **Student 6
 
 **My numbers:**
 
-- **74 API routes** — registered in `Main.start`, printed at boot as `routes=74`
-- **12 migrations** — applied by `Migrator.apply` on first boot; the boot log prints `migrations=12`
-- **8 pinned runtime jars** — declared in `pom.xml` (PostgreSQL 42.7.14, HikariCP 5.1.0, bucket4j-core 8.10.1, caffeine 3.1.8, metrics-core 4.2.25, sentry 7.14.0, slf4j-api 2.0.13, slf4j-nop 2.0.13)
+- **74 logical API routes across two services** — core-service `routes=56`, auth-service `routes=19`; the gateway (:8080) forwards both, and the mobile app still uses one address
+- **3 running services** — gateway :8080 · auth-service :8081 · core-service :9000 — sharing **one Neon PostgreSQL** with `DB_POOL_MAX ≤ 5` per DB-touching service
+- **12 migrations** — applied by core-service's `Migrator.apply` on first boot (boot log prints `migrations=12`); auth-service prints `migrations skipped` and ignores `MIGRATOR_ENABLED` entirely
+- **8 pinned runtime jars** — declared in the module poms (PostgreSQL 42.7.14, HikariCP 5.1.0, bucket4j-core 8.10.1, caffeine 3.1.8, metrics-core 4.2.25, sentry 7.14.0, slf4j-api 2.0.13, slf4j-nop 2.0.13)
 - **16 active configuration variables** documented in `server/.env.example` (17 entries counting the optional, commented `DB_SCHEMA`)
-- **Scheduler:** first tick after 15 s, then every 60 s; notifications de-duplicated to at most one per document, per type, per calendar day
+- **Scheduler:** first tick after 15 s, then every 60 s — and a **single-JVM contract**: it runs in core-service only, or notifications double-fire
 - **Seeded demo:** runs only on an empty `users` table of a localhost database — an org, six accounts, 2 folders, 5 documents, 1 share, 1 approved verification
-- Server: **one Java 21 process**, default port **8080**, 32 request threads, pool min 2 / max 10
-- **One-command build and boot** — `mvn clean package` then `mvn exec:java`, both working from a clean clone (demonstrated live at the defence)
+- **One-command build, one-command boot** — `mvn clean install` builds the whole reactor (3 runnable jars); `docker compose up --build` boots the entire campus; both work from a clean clone (demonstrated live at the defence)
 - `/api/meta` advertises `screens: 45`, `features: 216`
 - Pool knobs I configure: **connection timeout 10 s, max lifetime 30 min** ("retire connections before Postgres default idle timeouts")
 - Mail timeouts: **10 s connect, 15 s request** (`MailService`'s HTTP client); provider failure surfaces as **502 MAIL_SEND_FAILED**
-- Jar artifact: **`docutrust-server.jar`** (`<finalName>docutrust-server-${project.version}</finalName>` in the pom), Main-Class `com.docutrust.Main`
+- Jar artifacts: **`docutrust-gateway.jar`** (Main-Class `com.docutrust.gateway.Main`), **`docutrust-auth-service.jar`** (`com.docutrust.authservice.Main`), **`docutrust-core-service.jar`** (`com.docutrust.Main`)
 
 > **Note:** every claim in this brief is verifiable from the public repository alone — the pom is the build of record, `mvn clean package` turns a clean clone into the runnable jar, and the boot, health and metrics endpoints are demonstrated live at the defence.
 
@@ -40,9 +42,9 @@ This file is the complete rehearsal brief for the student presenting **Student 6
 
 ## Elevator pitch (≈ 1 minute)
 
-> "I own getting it running — anywhere, in one command. The server is a single Java 21 process: one command — `mvn clean package` — fetches the exact eight libraries from Maven Central, compiles and packs the runnable jar, and `mvn exec:java` boots it with a fail-fast config check: a weak JWT secret or a missing vault key stops startup with a human explanation instead of a runtime surprise. Configuration is sixteen environment variables documented in `.env.example`, including the Brevo mail credentials and the MAIL_MODE switch — dev mode routes OTP codes to the log and an X-Dev-OTP header for demos, live mode sends real email through Brevo's API. Operations got real telemetry this sprint: HikariCP pool stats and Dropwizard request metrics surface on /api/health, and Sentry Spotlight tracing is one optional flag. The whole project zips to a submission with no build artifacts or local paths, and the demo seed brings up six accounts and sample documents on an empty database. Proof: from a clean clone, Maven packages and boots the server with the same `.env`, the same migrations and the same boot log — demonstrated live at the defence."
+> "I own getting it running — anywhere, in one command. The backend is now a **campus of three Java 21 processes**: one command — `mvn clean install` — builds the whole reactor into three runnable jars, and `docker compose up --build` boots them all: the **gateway** (:8080) — a pure-JDK reverse proxy I own, which forwards every request untouched to the right building and answers a clean `502 BAD_GATEWAY` when one is down — plus **auth-service** (:8081) and **core-service** (:9000), each with the fail-fast config check: a weak JWT secret or a missing vault key stops startup with a human explanation instead of a runtime surprise. Both DB-touching services share **one Neon PostgreSQL** with small pools (≤ 5 each — free-tier friendly), migrations run exactly once (core-service only), and the compose file wires `CORE_URL`/`AUTH_URL` into the gateway and mounts one shared vault volume so MFA secret decryption works across services. Configuration is the same sixteen `.env.example` variables, including the Brevo mail credentials and the MAIL_MODE switch — dev mode routes OTP codes to the log and an X-Dev-OTP header for demos, live mode sends real email through Brevo's API. Operations got real telemetry: HikariCP pool stats and Dropwizard request metrics surface on /api/health, and Sentry Spotlight tracing is one optional flag. Proof: from a clean clone, `docker compose up --build` boots the campus, and a login-plus-documents walk through :8080 shows one address routing to two buildings — stop a service live and the gateway answers 502 instead of hanging."
 
-*Then demo:* the live local boot — console up, `.env` loaded, and the proof line appearing: `[main] DocuTrust ready on port 8080 (migrations=12, routes=74, db=up, boot=…ms)` — followed by `curl http://localhost:8080/api/health` showing `db: true`.
+*Then demo:* `docker compose up --build` from the repository root — three consoles of boot lines ending in the gateway's banner `[gateway] ready on port 8080 (core=http://core-service:9000, auth=http://auth-service:8081)` — followed by `curl http://localhost:8080/api/health` showing `db: true` (routed through the gateway to core-service), a login-plus-documents walk through the same address, and (the showstopper) stopping auth-service and watching the gateway answer `502 BAD_GATEWAY` instantly.
 
 ---
 
@@ -54,8 +56,8 @@ Every path below exists in the repository today — open any of them during the 
 
 | File | What it does, in one plain-English sentence |
 |---|---|
-| `server/pom.xml` | The Maven build of record: Java 21 (`maven.compiler.release`), eight pinned runtime dependencies, a jar built as `docutrust-server` with `com.docutrust.Main` as the Main-Class, an `exec-maven-plugin` configuration for `mvn exec:java`, and a deliberate comment noting there is no Surefire/JUnit — the build's job ends at the runnable jar. |
-| Local builds | For local builds, use `mvn clean package` and `java -jar` on the resulting `docutrust-server.jar` — Maven fetches the eight pinned libraries from Maven Central by itself. |
+| **The module poms under `server/`** (parent + shared + the six service modules) | The Maven build of record: Java 21 (`maven.compiler.release`), the eight pinned runtime dependencies, three runnable shaded jars (`docutrust-gateway` / `docutrust-auth-service` / `docutrust-core-service`, each with its own `Main-Class`), `exec-maven-plugin` configurations for `mvn exec:java`, and a deliberate comment noting there is no Surefire/JUnit — the build's job ends at the runnable jars. |
+| Local builds | For local builds, use `mvn clean install` and `java -jar` on the resulting jars (`docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar`) — Maven fetches the eight pinned libraries from Maven Central by itself. |
 
 ### The eight pinned dependencies, one line each
 
@@ -100,7 +102,7 @@ The pom's comment says it outright: `Deliberately no surefire/junit` — the bui
 | Variable | What it controls | What happens if wrong or missing |
 |---|---|---|
 | `PORT` | The HTTP port the API listens on (default `8080`) | Falls back to 8080 |
-| `DB_URL` | The PostgreSQL JDBC URL (local form, or the Supabase session-pooler form documented in the file) | `Main` exits with a pointer to `.env.example` |
+| `DB_URL` | The PostgreSQL JDBC URL (local form, or the Neon pooled-connection form documented in the file) | `Main` exits with a pointer to `.env.example` |
 | `DB_USER` / `DB_PASSWORD` | Database credentials | Passed to the pool; missing values fall through to the URL |
 | `JWT_SECRET` | The HMAC signing key for access tokens | Unset → an ephemeral secret is generated (tokens die on restart); shorter than 32 chars or the placeholder → **refused at boot (E-3)** |
 | `VAULT_KEY` | The AES-256 vault key: 44-char base64 = exactly 32 bytes | Unset with a non-empty vault → **refused** (prevents fabricating tamper evidence); wrong format → **refused (D-1)**; unset with an empty vault → requires `ALLOW_EPHEMERAL_VAULT=true` |
@@ -234,25 +236,37 @@ What an examiner sees in the console, with the sender of each line — this is t
 
 | Console line | Printed by | Meaning |
 |---|---|---|
-| `[main] migrations applied: 12` | `Main.start` | The moving truck delivered every missing box |
-| `[main] DocuTrust ready on port 8080 (migrations=12, routes=74, db=up, boot=…ms)` | `Main.start` | The proof line: schema up, 74 routes registered, database reachable, boot time |
-| `[bootstrap] demo seed complete: 2 folders, 5 documents, 1 share, 1 verification` | `Bootstrap.seed` | Only on an empty local database (order varies by seed outcome) |
-| `[scheduler] expiry scheduler started (60s tick)` | `ExpiryScheduler.start` | The heartbeat is armed |
-| `[http] GET /api/health -> 200 (2 ms)` | `Router.handle`'s finally block | One line per request, forever, method + path + status + duration |
-| `[main] shutting down...` | the shutdown hook in `Main.main` | `Ctrl+C` ran `App.stop()` cleanly |
+| `[gateway] ready on port 8080 (core=http://localhost:9000, auth=http://localhost:8081)` | gateway `Main` | The front desk is up and knows both buildings (compose uses the service names: `core=http://core-service:9000, auth=http://auth-service:8081`) |
+| `[gateway] POST /api/auth/login -> 200 (43 ms) -> http://localhost:8081` | gateway `proxy` | One line per request: method, path, upstream status, duration, and **which building** served it |
+| `[main] migrations applied: 12` | core-service `Main.start` | The moving truck delivered every missing box — core-service is the only migrator |
+| `[main] DocuTrust ready on port 9000 (migrations=12, routes=56, db=up, boot=…ms)` | core-service `Main.start` | The vault room's proof line: schema up, 56 routes, database reachable, boot time |
+| `[auth-service] migrations skipped (auth-service never runs migrations)` | auth-service `Main` | The bouncer never delivers furniture — no migration races by construction |
+| `[auth-service] ready on port 8081 (routes=19, db=up)` | auth-service `Main` | The security desk's proof line |
+| `[bootstrap] demo seed complete: 2 folders, 5 documents, 1 share, 1 verification` | `Bootstrap.seed` (core-service only) | Only on an empty local database (order varies by seed outcome) |
+| `[scheduler] expiry scheduler started (60s tick)` | `ExpiryScheduler.start` (core-service only) | The heartbeat is armed — single-JVM contract |
+| `[http] GET /api/health -> 200 (2 ms)` | each service's `Router.handle` finally block | One line per request, forever, method + path + status + duration |
+| `[gateway] … upstream http://localhost:8081 failed: …` | gateway `proxy` catch | A building is down — the caller is already receiving the `502 BAD_GATEWAY` envelope |
+| `[main] shutting down...` | each JVM's shutdown hook | `Ctrl+C` ran `App.stop()` cleanly |
 
-### The public runbook: clean clone to listening server
+### The public runbook: clean clone to running campus
 
-Every step below uses only what the public repository contains:
+Every step below uses only what the public repository contains. **Path A — Docker (one command):**
 
-1. Install a JDK 21 (any distribution; the pom's `maven.compiler.release` is 21).
-2. Create a PostgreSQL database — local, or the Supabase session-pooler URL form documented inside `server/.env.example`.
-3. `cp server/.env.example server/.env` and fill it in; generate secrets with `openssl rand -base64 48` (JWT) and `openssl rand -base64 32` (vault key). Keep `SEED_DEMO=true` only if `DB_URL` is localhost.
-4. `mvn -f server/pom.xml clean package` — Maven resolves the eight pinned dependencies from Maven Central and packs the runnable `docutrust-server.jar`.
-5. From `server/`, run `mvn exec:java` — `Config.load()` finds `.env` in the working directory, the fail-fast gates check it, migrations apply, routes register.
-6. Read the proof line; `curl http://localhost:8080/api/health` and check `db: true`.
-7. Point the phone at it: `mobile/.env` with `EXPO_PUBLIC_API_URL=http://<your LAN IP>:8080` (see `mobile/.env.example`).
-8. The flows then run live against this server at the defence — manual API calls (Postman/cURL) driving every OTP path, as rehearsed in the per-student packs.
+1. Install Docker (and a JDK 21 if you prefer Path B).
+2. `cp DocuTrust/server/.env.example .env` and fill it in: `DB_URL` (local or the Neon pooler form), `DB_USER`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 48`), `VAULT_KEY` (`openssl rand -base64 32`). Keep `SEED_DEMO=true` only if `DB_URL` is localhost.
+3. `docker compose up --build` from the repository root — Compose builds the three images from `DocuTrust/server/Dockerfile` (one builder stage, three runner stages), wires `CORE_URL=http://core-service:9000` and `AUTH_URL=http://auth-service:8081` into the gateway, mounts the shared vault volume into auth and core, caps each DB pool at 5, and publishes 8080 (the app's address) plus 8081/9000 for direct debugging.
+4. `curl http://localhost:8080/api/health` → `db: true` — already routed through the gateway. Point the phone's `EXPO_PUBLIC_API_URL` at `http://<LAN IP>:8080`.
+
+**Path B — three terminals (no Docker):**
+
+1. Install a JDK 21 and Maven 3.9+.
+2. `cp DocuTrust/server/.env.example DocuTrust/server/.env` and fill it in (same variables).
+3. `cd DocuTrust/server && mvn clean install` — the reactor builds `docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar`.
+4. Terminal 1: `PORT=9000 MIGRATOR_ENABLED=true SEED_DEMO=false mvn -pl core-service exec:java` → `[main] DocuTrust ready on port 9000 (migrations=12, routes=56, db=up)`.
+5. Terminal 2 (**from `server/`**, never from inside `auth-service/` — the shared vault path resolves from the working directory): `PORT=8081 mvn -pl auth-service exec:java` → `migrations skipped` then `routes=19`.
+6. Terminal 3: `mvn -pl gateway exec:java` → `[gateway] ready on port 8080 (core=http://localhost:9000, auth=http://localhost:8081)`.
+7. `curl http://localhost:8080/api/health` and a login → documents walk through :8080 — one address, two buildings. Stop either service and the gateway answers `502 BAD_GATEWAY`.
+8. The flows then run live against this campus at the defence — manual API calls (Postman/cURL) driving every OTP path through the gateway, as rehearsed in the per-student packs.
 
 ### What ships in the public repository
 
@@ -260,7 +274,7 @@ The public repository is clean by construction: secrets, build output and local 
 
 | Ships in the public repository |
 |---|
-| `server/pom.xml` and all server source under `src/main/java` |
+| The module poms and all service source under `server/*/src/main/java` |
 | `server/.env.example` and `mobile/.env.example` (placeholders only) |
 | `database/migrations/` V01–V12 |
 | The root `.gitignore` itself, plus all docs |
@@ -277,7 +291,7 @@ Any examiner can verify the fence live: run `git check-ignore -v` on any ignored
 | **`.env.example`** | The blank application form: every variable documented with a placeholder, safe to publish, and — in our case — with placeholders the server actively refuses to run on. |
 | **Fail-fast** | The pre-flight checklist: refuse to start with a known-broken setup and say exactly why, instead of taking off and crashing at altitude (E-3 and the other `Config` gates). |
 | **JDK / JRE** | The kitchen versus the dining room: a JDK can *cook* (compile) Java, a JRE can only *serve* (run) it — which is why the pom declares `maven.compiler.release` 21: a JDK 21 builds the jar, any JRE 21 runs it. |
-| **Jar** | A zip of compiled Java with a label saying where the front door (`Main-Class`) is — our server is one jar plus eight library jars. |
+| **Jar** | A zip of compiled Java with a label saying where the front door (`Main-Class`) is — our campus is three jars (`docutrust-gateway`, `docutrust-auth-service`, `docutrust-core-service`), each with its own `Main-Class` |
 | **Maven** | The recipe-and-shopping service: `pom.xml` lists exactly which ingredients at which versions, and Maven fetches, compiles and packages — the same list every machine builds from. |
 | **Pinned dependency** | Ordering the exact same dish by recipe, not "whatever the chef feels like": every library has a fixed version (HikariCP 5.1.0, not "latest"), so every machine builds identical behaviour. |
 | **Seeder** | The model-flat furniture: `Bootstrap.seed` furnishes an *empty* database with demo accounts and documents so the app is demonstrable — and refuses to move furniture into an occupied building (non-local or non-empty database). |
@@ -294,8 +308,16 @@ Any examiner can verify the fence live: run `git check-ignore -v` on any ignored
 
 ### From the per-student pack (the classics)
 
+**Q: "How does the gateway decide where a request goes — and what if a building is down?"**
+
+> Three rules, checked in order, in one readable file. `POST` to **exactly** `/api/auth/accept-invite` → core-service (RC-1: admin-domain org logic under an auth prefix — checked *before* the prefix rule). Any other path starting with `/api/auth/` → auth-service. Everything else → core-service. The gateway forwards method, raw path, raw query, headers and body **byte-for-byte** (so 25 MB uploads survive), strips only the headers a proxy must not copy (hop-by-hop, `host`, `content-length` — recomputed for the new destination — and `date`/`server`), and rewrites `X-Forwarded-For` from the live peer so audit rows keep the real client IP. If the target service is unreachable — refused connection, timeout — the gateway answers `502` with our standard error envelope, `{"ok":false,"error":{"code":"BAD_GATEWAY",…}}`, in milliseconds; it never hangs the app on a closed building. Pure JDK 21 (`com.sun.net.httpserver` + `java.net.http.HttpClient`), zero dependencies — one file you can read aloud.
+
+**Q: "What does `docker compose up` actually build and wire?"**
+
+> One builder stage compiles the whole Maven reactor; three small runner stages (`gateway`, `auth`, `core` targets in `server/Dockerfile`) each copy exactly one jar plus a non-root user — core also gets the `database/` migrations and a writable vault directory. The compose file then: wires `CORE_URL=http://core-service:9000` and `AUTH_URL=http://auth-service:8081` into the gateway (the receptionist learns the buildings' internal addresses), mounts **one named volume** at `/app/data/vault` into *both* auth and core (so MFA secrets encrypted by one are decryptable by the other — the same contract the local runbook has), gives each DB-touching service `DB_POOL_MAX=5` (four services × 5 fits Neon's free tier), and leaves `MIGRATOR_ENABLED=true` only on core. `.env` supplies `DB_URL`/`DB_USER`/`DB_PASSWORD`/`JWT_SECRET`/`VAULT_KEY` to every service identically — one source of secrets, which is precisely what makes cross-service JWT validation work.
+
 **Q: "How would you deploy this to real users?"**
-The server is a single jar with no framework: any JVM 21 host or container works. I would run it behind a reverse proxy for TLS (the API already sets CORS per config), point DB_URL at managed PostgreSQL — we already support the Supabase pooler form — set MAIL_MODE=live with the Brevo key, VAULT_KEY from a secret store, SEED_DEMO=false (the server itself refuses demo seeds on non-localhost databases), and let the migration runner bring the schema up on first boot. Health checks already exist at /api/health.
+The backend is a campus of three containers, so: run the compose stack, put a TLS-terminating proxy in front of the **gateway** (the API already sets CORS per config), point `DB_URL` at managed PostgreSQL — we run Neon's pooled form today — set `MAIL_MODE=live` with the Brevo key, `VAULT_KEY` from a secret store, `SEED_DEMO=false` (the server itself refuses demo seeds on non-localhost databases), and let core-service's migration runner bring the schema up on first boot. Each building scales independently behind the gateway and the app's address never changes. Health checks already exist at `/api/health`, and a down building becomes a typed `502 BAD_GATEWAY`, not a hang.
 
 **Q: "What stops a developer from leaking production secrets into the repo?"**
 Three fences. First, secrets only exist in .env files, and a comprehensive .gitignore sits at the project root blocking secrets, build output, dependencies, editor settings and OS files from ever being committed — you can verify any pattern live with git check-ignore. Second, .env.example documents every variable with placeholders that the server actively refuses — the JWT placeholder is on a blocklist (E-3) — so nobody can run with example secrets by accident. Third, the committed template files carry no real values: mobile/.env.example ships YOUR_PC_IP_ADDRESS as its placeholder.
@@ -318,7 +340,7 @@ Every value is captured once into `final` fields of `Config` during the validate
 One Dropwizard `MetricRegistry`, fed from exactly one place: `Metrics.route(method, pattern)`, called by the router around every handler execution. It marks a **meter** and opens a **timer** keyed by the route *pattern* — `POST /api/auth/login` — never by raw URL, so the namespace is bounded by the 73 registered patterns and cannot explode with ids. `requestsTotal()` sums every meter's count; `meanLatencyMs()` is the call-count-weighted mean of the per-route timer means. Because the timer is a try-with-resources block, failed and slow requests are counted too, not just happy paths. `HealthController.health()` publishes the two aggregates alongside the live `SELECT 1` database ping and the uptime.
 
 **Q: "Why does the seeder refuse to run against a non-local database?"**
-Because the demo credentials are in source control — that is their whole point, and their whole danger. `Config.isLocalDbUrl` extracts the host from the JDBC URL and only accepts `localhost` or `127.0.0.1`, deliberately failing closed on unparseable URLs; `Bootstrap.seed` re-checks the same rule before touching anything. So no accidental `DB_URL` pointing at our shared Supabase project can ever populate it with accounts whose passwords everyone in the room knows. The gate exists twice — once in the `Config` constructor at boot, once inside the seeder — because a safety check you can bypass by skipping a step is not a safety check.
+Because the demo credentials are in source control — that is their whole point, and their whole danger. `Config.isLocalDbUrl` extracts the host from the JDBC URL and only accepts `localhost` or `127.0.0.1`, deliberately failing closed on unparseable URLs; `Bootstrap.seed` re-checks the same rule before touching anything. So no accidental `DB_URL` pointing at our shared Neon project can ever populate it with accounts whose passwords everyone in the room knows. The gate exists twice — once in the `Config` constructor at boot, once inside the seeder — because a safety check you can bypass by skipping a step is not a safety check.
 
 **Q: "What happens when Brevo is down or rejects a mail?"**
 `MailService` posts to Brevo's transactional API with a 10-second connect timeout and a 15-second request timeout; a network interruption, a timeout or a non-success HTTP status from Brevo is converted into an `AppException` with status 502 and code `MAIL_SEND_FAILED` — the one place our API surfaces a provider failure, documented in `docs/API_CONTRACTS.md`. The user sees an honest "email delivery failed" rather than a hang or a fake success, and can retry. And our demos are immune by construction: `MAIL_MODE=dev` never touches the network at all — the code goes to the log and the `X-Dev-OTP` header — so the entire OTP feature chain is rehearsable with the postman on strike.

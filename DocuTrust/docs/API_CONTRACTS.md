@@ -1,7 +1,20 @@
 # DocuTrust — REST API Contract (v1)
 
-Base URL: `http://localhost:8080` · All bodies are JSON unless marked *multipart*.
+Base URL: `http://localhost:8080` — **the gateway's address; the app only ever uses this one** · All bodies are JSON unless marked *multipart*.
 Auth = `Authorization: Bearer <accessToken>` (15 min) + rotating refresh token (7 days).
+
+> **Explain it like I'm 5:** the base URL is the **receptionist's front desk** (the gateway, port 8080). You never need to know which building actually cooks your order. The desk forwards every request **unchanged** — same method, same address, same headers, same bytes — and hands the exact answer back. Only the desk itself knows the two buildings: the **bouncer** (auth-service, 8081) for identity requests, and the **vault room** (core-service, 9000) for everything else.
+
+## Which service serves what (gateway routing)
+
+| Rule | Served by | Routes |
+|---|---|---|
+| `POST /api/auth/accept-invite` (**exact match only** — RC-1) | **core-service :9000** | 1 — admin-domain org logic that lives under an auth prefix; the gateway checks this rule *before* the prefix rule below |
+| Path starts with `/api/auth/` | **auth-service :8081** | 18 `/api/auth/*` routes (§1) |
+| Everything else | **core-service :9000** | §2–§9, including `GET /api/health` |
+| Upstream service down | — | the **gateway itself** answers `502 BAD_GATEWAY` (see error table) |
+
+Both services read the same `JWT_SECRET`, so a token issued by auth-service is verified by core-service directly — cross-service JWT validation, no introspection call.
 
 ## Conventions
 
@@ -37,6 +50,7 @@ Auth = `Authorization: Bearer <accessToken>` (15 min) + rotating refresh token (
 | 440 | MFA_REQUIRED | TOTP code required for this account |
 | 440 | MFA_EMAIL_CHALLENGE | email-MFA fallback: body carries `challenge`; POST it with the emailed code to /api/auth/verify-otp |
 | 502 | MAIL_SEND_FAILED | Brevo rejected/failed the OTP email (live mode only) |
+| 502 | BAD_GATEWAY | the **gateway** could not reach the target service (auth or core down/unreachable) — `message` names it; the mobile app sees a typed code, never a hang |
 | 500 | INTERNAL_ERROR | logged in audit_logs, generic message to client |
 
 **Pagination**: `?page=1&limit=20` (max limit 100). **Search**: `?search=term` (ILIKE via pg_trgm on title/email). **Filtering**: `?status=&type=&folder=`. **Sorting**: `?sort=created_at&order=desc`.
@@ -45,7 +59,7 @@ Auth = `Authorization: Bearer <accessToken>` (15 min) + rotating refresh token (
 
 ---
 
-## 1. Auth (public)
+## 1. Auth (public) — served by **auth-service :8081** via the gateway, EXCEPT `accept-invite` → **core-service :9000** (RC-1)
 
 | Method | Path | Roles | Request | Response data |
 |--------|------|-------|---------|---------------|
@@ -73,7 +87,7 @@ Auth = `Authorization: Bearer <accessToken>` (15 min) + rotating refresh token (
 
 **OTP engine (shared by all five flows):** codes are 6 digits from `SecureRandom`, stored only as `sha256(purpose:email:code)`, single-use, 10-minute TTL (24 h for invites), burned after 5 wrong attempts; at most one live code per (purpose, target). In `MAIL_MODE=dev` codes are echoed in the `X-Dev-OTP` response header (bodies never carry them); in `MAIL_MODE=live` they travel only by Brevo email.
 
-## 2. Documents (auth; ownership enforced in SQL WHERE owner_id = :me)
+## 2. Documents (auth; ownership enforced in SQL WHERE owner_id = :me) — served by **core-service :9000** via the gateway
 
 | Method | Path | Roles | Notes |
 |--------|------|-------|-------|
@@ -182,7 +196,7 @@ Verification request object: `{id, documentId, requesterId, verifierName, verifi
 | GET | /api/meta | app metadata for SEO/indexing `{name, tagline, description, roles[], screens:45, features:216}` |
 
 ### Rate limiting
-Auth endpoints (login/register/forgot-password/reset-password-otp/verify-otp/accept-invite), the step-up pair, and the public share-link and verify endpoints are rate limited per scope + IP: auth 20/min, public-share 30/min, public-verify 20/min, others 10/min → `429 RATE_LIMITED`. Implemented with Bucket4j token buckets (one per scope|IP, held in a Caffeine cache); token buckets smooth bursts instead of permitting a full window at once.
+Auth endpoints (login/register/forgot-password/reset-password-otp/verify-otp/accept-invite), the step-up pair, and the public share-link and verify endpoints are rate limited per scope + IP: auth 20/min, public-share 30/min, public-verify 20/min, others 10/min → `429 RATE_LIMITED`. Implemented with Bucket4j token buckets (one per scope|IP, held in a Caffeine cache); token buckets smooth bursts instead of permitting a full window at once. The limiter runs **inside each service** on top of its own router — the gateway forwards everything and adds no limits of its own.
 
 ### Multipart spec
 `Content-Type: multipart/form-data`; file field MUST be named `file`. Allowed mime: `application/pdf, image/png, image/jpeg, image/webp, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Max size **25 MB**. Server computes SHA-256 while streaming, encrypts with AES-256-GCM, stores `<uuid>.bin` in vault dir.

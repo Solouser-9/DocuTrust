@@ -2,9 +2,11 @@
 
 Ten hands-on demos for the final presentation. Each is reproducible with the seeded accounts (see server bootstrap) and one-line curl/app steps.
 
+> **Running them after the microservices refactor:** drive every demo through the **gateway on :8080** — the receptionist forwards each request to the right building (auth :8081 or core :9000) and you cannot tell the difference. **New bonus demo:** stop a service and watch the gateway answer `502 BAD_GATEWAY` instantly (a typed error, not a hang) — proof the front desk never pretends a closed kitchen is open.
+
 | # | Edge case | Script | Expected behaviour |
 |---|-----------|--------|--------------------|
-| 1 | **Expired share link** | Create link with `expiresInHours: 0.01` (~36 s). Open it in the app now → works. Wait 40 s → open again | Second open returns `410 SHARE_EXPIRED`; public page shows "This link has expired"; owner sees status badge flip |
+| 1 | **Expired share link** | Create link with `expiresInHours: 0.01` (~36 s) via :8080. Open it in the app now → works. Wait 40 s → open again | Second open returns `410 SHARE_EXPIRED`; public page shows "This link has expired"; owner sees status badge flip |
 | 2 | **Instant revocation** | Create share link, open once (works), owner taps Revoke, open again | `409 SHARE_REVOKED` immediately; open verification link of same doc still fine (isolation) |
 | 3 | **Max-views exhaustion** | Share with `maxViews: 2`; open twice; third open | Third open → `409 SHARE_MAX_VIEWS`; view_count frozen at 2; download ticket of an unconsumed ticket also dies (single-use) |
 | 4 | **Access-token death mid-session** | Set access token aside; wait 15 min (or tamper exp); tap any list | Client gets `401 TOKEN_EXPIRED`, silently refreshes (rotating), retries → user never sees error. No audit row is written for a routine rotation — only reuse events are audited (`auth.token_reuse`, see #5) |
@@ -16,6 +18,7 @@ Ten hands-on demos for the final presentation. Each is reproducible with the see
 | 10 | **Tamper-evident verification** | Create verification link for a document; verify → `valid`. (Demo hook) overwrite 2 bytes in the vault file, verify again | Result flips to `tampered` because recomputed SHA-256 ≠ stored SHA-256; proves version integrity end-to-end |
 
 **Bonus rapid-fire edge cases (Q&A if time allows):**
+- **Gateway 502:** stop auth-service, try to log in via :8080 → `502 {"error":{"code":"BAD_GATEWAY"}}` from the gateway itself; core routes keep working — the front desk isolates building outages.
 - Suspended user: admin suspends → member's next request is `403 ACCOUNT_SUSPENDED`.
 - Sensitive upload: medical doc enters `pending_review`; hidden from shares until admin approves (FT-065/093).
 - Folder delete: documents survive with `folder_id = NULL` (FK ON DELETE SET NULL).

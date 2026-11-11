@@ -2,19 +2,21 @@
 
 Rendered diagram: [`diagrams/er.png`](diagrams/er.png) · Mermaid source: [`diagrams/src/er.mmd`](diagrams/src/er.mmd)
 
+> **The microservices twist — one cabinet, two chefs.** After the refactor, auth-service (the bouncer, :8081) and core-service (the vault room, :9000) both connect to the **same** PostgreSQL database (free-tier Neon). We deliberately did **not** split the schema per service: it would force distributed transactions ("what if the login commits but the document insert doesn't?"), and two cloud databases cost twice the free-tier connection budget. Instead both services get a small pool each (`DB_POOL_MAX ≤ 5`), **core-service alone runs the migrations** (auth-service's migrator is hardcoded off — no two trucks delivering the same furniture), and the schema's own rules keep both chefs honest: ownership is a column on every row, "sensitive documents need review" is a CHECK constraint, history tables refuse UPDATE/DELETE by trigger, and every one-time code is stored only as a salted hash. Fifteen tables, grouped below, tell one simple story — people in organisations own folders of documents; documents are versioned, shared and verifiable; and two tables exist purely for trust: `audit_logs` (what happened, unchangeable) and `email_otps` (short-lived proof-of-inbox codes).
+
 > **Plain English — how to read this:** the database is the referee. Application code can have bugs, so the rules that must *never* break live here, in the schema: ownership is a column on every row, "sensitive documents need review" is a CHECK constraint, history tables refuse UPDATE/DELETE by trigger, and every one-time code is stored only as a salted hash. Fifteen tables, grouped below, describe one simple story — people in organisations own folders of documents; documents are versioned, shared and verifiable; and two tables exist purely for trust: `audit_logs` (what happened, unchangeable) and `email_otps` (short-lived proof-of-inbox codes).
 
 > **Explain it like I'm 5:** think of the database as a **filing cabinet**. Each **table is a drawer** (`users`, `documents`, `shares`… fifteen of them), each **row is an index card** in that drawer, and every card in a drawer has the same printed **fields (columns)** — no hand-scribbled odd shapes. A **foreign key is a cross-reference on the card**: a document card says "owner: see card #42 in the USERS drawer", and the clerk refuses to file a card whose reference doesn't exist — or to destroy a user card while documents still point at it. The cabinet was built from eleven numbered instruction sheets (`V01…V12`, the **migrations**), so anyone can rebuild the identical cabinet from scratch in order, in minutes. PostgreSQL is the strict, free, 25-year-old clerk who enforces the house rules even against our own bugs.
 
-## Tables (15)
+## Tables (15) — one shared database, two services
 
-| Group | Tables |
-|---|---|
-| Identity & access | `organisations`, `users`, `settings`, `refresh_tokens`, `password_resets` |
-| Vault core | `folders`, `documents`, `document_versions`, `document_history` |
-| Sharing & proofs | `shares`, `verification_requests` |
-| Platform | `notifications`, `admin_reviews`, `audit_logs` |
-| One-time codes | `email_otps` (V10 — password reset, MFA login, step-up, share access, org invites) |
+| Group | Tables | Who reads/writes it |
+|---|---|---|
+| Identity & access | `organisations`, `users`, `settings`, `refresh_tokens`, `password_resets` | auth-service (logins, tokens) · core-service (profiles, admin) |
+| Vault core | `folders`, `documents`, `document_versions`, `document_history` | core-service only |
+| Sharing & proofs | `shares`, `verification_requests` | core-service only |
+| Platform | `notifications`, `admin_reviews`, `audit_logs` | both (each appends its own audit rows) |
+| One-time codes | `email_otps` (V10 — password reset, MFA login, step-up, share access, org invites) | auth-service (mints/verifies) · core-service (share-access codes via shared OtpService) |
 
 ## Foreign keys (all N:1, ON DELETE CASCADE unless noted)
 

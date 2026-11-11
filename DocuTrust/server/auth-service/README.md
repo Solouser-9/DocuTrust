@@ -1,11 +1,15 @@
-# auth-service (Phase 2)
+# auth-service (Phase 2, behind the gateway since Phase 3)
 
-Serves the 18 `/api/auth/*` routes extracted from core-service — register, login, forgot-password,
+The **bouncer's building** — serves the 18 `/api/auth/*` routes extracted from core-service: register, login, forgot-password,
 reset-password-otp, verify-otp, refresh, logout, verify-email, me (GET+PATCH), sessions (GET+DELETE),
 change-password, request-step-up, verify-step-up, mfa/setup, mfa/enable, mfa/disable — plus its own
 `GET /api/health`: **19 routes on port 8081**. Package names remain `com.docutrust.*`.
 `/api/auth/accept-invite` deliberately stays in core-service (RC-1: the handler is
-`OrgController.acceptInvite`, admin-domain logic under an auth prefix).
+`OrgController.acceptInvite`, admin-domain logic under an auth prefix — the gateway routes it there
+by exact match, checked before the `/api/auth/` prefix rule).
+
+The mobile app never talks to this port directly: it calls the **gateway on :8080**, which forwards
+every `/api/auth/*` request here byte-for-byte and carries the response back unchanged.
 
 ## Run (from `DocuTrust/server/` — CRITICAL)
 
@@ -14,8 +18,10 @@ change-password, request-step-up, verify-step-up, mfa/setup, mfa/enable, mfa/dis
 **Run from `server/`, never from inside `auth-service/`.** The default `VAULT_DIR=./data/vault` is
 resolved against the current working directory. From `server/` it is the SAME absolute path
 core-service uses, so both JVMs share one vault and MFA secret decryption works across services.
-Running from inside `auth-service/` points `VAULT_DIR` at `server/auth-service/data/vault` (a
-different, empty directory) and breaks MFA secret decryption across services.
+(In Docker, `docker-compose.yml` mounts the same named vault volume into both containers — same
+contract, containerised.) Running from inside `auth-service/` points `VAULT_DIR` at
+`server/auth-service/data/vault` (a different, empty directory) and breaks MFA secret decryption
+across services.
 
 ## CRITICAL: shared secrets
 
@@ -36,7 +42,7 @@ auth-service **never** runs migrations. The skip is hardcoded in `Main` — it p
 - `PORT` — process env var only, default **8081**. A `PORT` value inside `.env` is deliberately
   ignored by auth-service (Main reads the environment directly), so the port core-service uses can
   never leak into auth-service.
-- `DB_POOL_MAX` — HikariCP `maximumPoolSize` (default 10). Phase 2 guidance: every DB-touching
-  service sets **≤ 5** (4 services × 5 = 20 connections, within Neon limits).
+- `DB_POOL_MAX` — HikariCP `maximumPoolSize` (default 10). Production guidance (Neon free tier):
+  every DB-touching service sets **≤ 5** — the Docker Compose file does this for you.
 - No `Bootstrap` seeding (SEED_DEMO handling stays in core-service) and no `ExpiryScheduler`
   (single-JVM contract, stays in core-service).

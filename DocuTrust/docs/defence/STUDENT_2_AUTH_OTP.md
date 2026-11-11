@@ -8,14 +8,14 @@ Read your role section in `DEFENCE_GUIDE.md` first, then rehearse from here; `do
 
 **Role in one line:** how a stranger becomes a trusted user — and how a stolen password alone still is not enough.
 
-**Owns:** `AuthService`, `PasswordService` (PBKDF2), `TokenService` (rotating refresh + reuse detection + `listSessions` + `revokeById`), `MfaService` (TOTP), `JwtService` (hand-rolled HMAC-SHA256 tokens), `OtpService` (hashed one-time codes), `MailService` (Brevo), `StepUpService`, the rate limiter (`RateLimiter` on Bucket4j), and the mobile SecureStore-backed session persistence in the client; the `AuthController` endpoints; the `email_otps` schema; and the eight auth screens on the mobile side.
+**Owns:** `AuthService`, `PasswordService` (PBKDF2), `TokenService` (rotating refresh + reuse detection + `listSessions` + `revokeById`), `MfaService` (TOTP), `JwtService` (hand-rolled HMAC-SHA256 tokens), `OtpService` (hashed one-time codes), `MailService` (Brevo), `StepUpService`, the rate limiter (`RateLimiter` on Bucket4j), and the mobile SecureStore-backed session persistence in the client; the `AuthController` endpoints; the `email_otps` schema; and the eight auth screens on the mobile side — **the whole slice now runs in its own microservice, auth-service on :8081** (Phase 2 of the Strangler Fig refactor), reachable only through the gateway.
 
 **Feature claims:** FT-001 to FT-024 plus the post-audit security addendum FT-217 to FT-234 (`docs/FEATURES.md`).
 
 **My numbers:**
 
-- 74 API routes, printed at boot (`routes=74`, `server/src/main/java/com/docutrust/Main.java`) — the auth, refresh, OTP, step-up, MFA and Active Sessions routes among them are mine.
-- 15 database tables built by 12 migrations; V10 adds the `email_otps` table, V11 adds the OTP-gating fields on `shares` (shared with Student 3).
+- 74 logical API routes across the two services — **mine are the 19 in auth-service** (`routes=19`, printed at auth-service's boot, incl. its own health route): the auth, refresh, OTP, step-up, MFA and Active Sessions routes. The gateway forwards every one of them on `/api/auth/*`, except `accept-invite` which routes to core-service (RC-1).
+- 15 database tables built by 12 migrations, in **one shared Neon database** — V10 adds the `email_otps` table, V11 adds the OTP-gating fields on `shares` (shared with Student 3). auth-service never runs migrations; core-service is the sole migrator.
 - Every OTP flow — including the negative paths — re-driven live with manual API calls (Postman/cURL) at the defence.
 - PBKDF2-HmacSHA256 at **120,000 iterations**, 16-byte per-user salt, 256-bit key, constant-time verify (`PasswordService`).
 - Sessions: **15-minute** access JWT (hand-rolled HMAC-SHA256) plus a **7-day** refresh token, 43 characters, stored only as a SHA-256 hash; the device keeps the JWT pair in `expo-secure-store`, while the backend exposes `GET /api/auth/sessions` and `DELETE /api/auth/sessions/:id` for the user-facing Active Sessions screen.
@@ -31,7 +31,7 @@ Read your role section in `DEFENCE_GUIDE.md` first, then rehearse from here; `do
 
 ## Elevator pitch (≈ 1 minute)
 
-> "I own everything that proves who you are. Passwords are PBKDF2-hashed; sessions are a 15-minute access JWT plus a rotating refresh token whose reuse is detected and kills the whole token family — B-1 in our audit. On top we just shipped an email-OTP layer: six-digit codes, SHA-256-hashed in the database, single-use, ten-minute expiry, five attempts max, sent through Brevo. They power four flows: password reset, email MFA fallback for login — the server answers HTTP 440 with a challenge — step-up verification for destructive actions like permanent deletion, and OTP-gated share links. The security headline: after the overhaul, **no API response ever contains a password, a reset code, or a temporary password** — the inbox is the only place a code exists. The proof is live: every one of those flows — including the negative paths — is walked with manual API calls (Postman/cURL) during the defence."
+> "I own everything that proves who you are — and since the refactor, my slice is its own building: **auth-service on :8081**, reached only through the gateway. Passwords are PBKDF2-hashed; sessions are a 15-minute access JWT plus a rotating refresh token whose reuse is detected and kills the whole token family — B-1 in our audit. On top we shipped an email-OTP layer: six-digit codes, SHA-256-hashed in the database, single-use, ten-minute expiry, five attempts max, sent through Brevo. They power four flows: password reset, email MFA fallback for login — the server answers HTTP 440 with a challenge — step-up verification for destructive actions like permanent deletion, and OTP-gated share links. The security headline: after the overhaul, **no API response ever contains a password, a reset code, or a temporary password** — the inbox is the only place a code exists. And the microservices headline: my tokens are verified by the *other* building with the *same secret ink* — a shared `JWT_SECRET` gives us cross-service JWT validation with no introspection call, so login on :8081 and documents on :9000 just work behind one gateway address. The proof is live: every one of those flows — including the negative paths — is walked with manual API calls through :8080 during the defence."
 
 Then demo: on your local machine, replay a rotated refresh token on purpose and let the audience watch the whole token family die with `409 TOKEN_REUSE`; then walk forgot-password → emailed code → reset with the server log and the `X-Dev-OTP` header in dev mode showing where the code travels.
 
@@ -265,6 +265,10 @@ The story, the finding ID and the fix are all readable in the comments around `T
 **Q: "Could an attacker brute-force the six-digit code?"**
 
 > They get ten attempts per minute per IP from the shared rate limiter, and each attempt must land inside the code's ten-minute life with a five-attempt burn limit, so the search space is practically unreachable. The limiter plus the short window make guessing a losing game, and failed attempts are audited.
+
+**Q: "Your tokens are now issued by auth-service but used on core-service — how does core trust them?"**
+
+> Both services boot with the **same `JWT_SECRET`** from the same `.env` (E-3's fail-fast gate runs in both), and both run the *same* `JwtService` from the shared module — so verifying a token is pure arithmetic: HMAC the header-and-payload, compare, check expiry. There is no introspection call, no round trip, no extra failure mode: a token issued by my building is verifiable by the vault building offline, exactly like two branches of the same bank recognising the same printed cheques. The claims still carry `sub`, `role` and `org`, and core-service still re-loads the user from the shared database on every request — so a deleted or suspended account dies at the vault door even with a perfectly signed card. That is cross-service JWT validation, and the demo is two terminals: login on :8081, list documents on :9000 with the token.
 
 ### The masterclass ten
 
