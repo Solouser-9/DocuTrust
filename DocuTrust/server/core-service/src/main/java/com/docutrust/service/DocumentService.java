@@ -69,6 +69,12 @@ public final class DocumentService {
         Part file = parts.get("file");
         if (file == null || file.data.length == 0) throw AppException.validation("file", "file is required");
         if (file.data.length > MAX_FILE_BYTES) throw AppException.tooLarge("File exceeds the 25 MB limit");
+
+        // --- FIX FOR BUG 1: Truncate filename to prevent DB column overflow ---
+        if (file.filename != null && file.filename.length() > 255) {
+            file.filename = file.filename.substring(file.filename.length() - 255);
+        }
+
         String mime = resolveMime(file);
         final String fTitle = Validator.required(field(parts, "title"), "title", 200);
         String docType = Validator.oneOf(field(parts, "docType"), "docType", DOC_TYPES);
@@ -140,6 +146,10 @@ public final class DocumentService {
 
     // ---- list ----
     public Models.Page<Models.Document> list(Models.User me, Map<String, String> q, int page, int limit) {
+        // --- FIX FOR BUG 3: Clamp limit to prevent OOM attacks via massive JSON responses ---
+        if (limit > 100) limit = 100;
+        if (limit < 1) limit = 1;
+
         StringBuilder where = new StringBuilder(" WHERE d.owner_id = ?");
         List<Object> args = new ArrayList<>();
         args.add(UUID.fromString(me.id));
@@ -171,6 +181,7 @@ public final class DocumentService {
         if (!SORTABLE.contains(sort)) throw AppException.validation("sort", "sort must be one of: " + String.join(", ", SORTABLE));
         String order = "desc".equalsIgnoreCase(q.getOrDefault("order", "desc")) ? "DESC" : "ASC";
 
+        final int finalLimit = limit;
         return db.with(c -> {
             long total;
             try (PreparedStatement ps = c.prepareStatement("SELECT COUNT(*) FROM documents d" + where)) {
@@ -181,12 +192,12 @@ public final class DocumentService {
             try (PreparedStatement ps = c.prepareStatement("SELECT d.* FROM documents d" + where
                     + " ORDER BY d." + sort + " " + order + " LIMIT ? OFFSET ?")) {
                 List<Object> all = new ArrayList<>(args);
-                all.add(limit);
-                all.add((page - 1) * limit);
+                all.add(finalLimit);
+                all.add((page - 1) * finalLimit);
                 bind(ps, all);
                 try (ResultSet rs = ps.executeQuery()) { while (rs.next()) items.add(Rows.document(rs)); }
             }
-            return new Models.Page<>(items, page, limit, total);
+            return new Models.Page<>(items, page, finalLimit, total);
         });
     }
 
@@ -376,6 +387,12 @@ public final class DocumentService {
         Part file = parts.get("file");
         if (file == null || file.data.length == 0) throw AppException.validation("file", "file is required");
         if (file.data.length > MAX_FILE_BYTES) throw AppException.tooLarge("File exceeds the 25 MB limit");
+
+        // --- FIX FOR BUG 1: Truncate filename to prevent DB column overflow ---
+        if (file.filename != null && file.filename.length() > 255) {
+            file.filename = file.filename.substring(file.filename.length() - 255);
+        }
+
         String mime = resolveMime(file);
         String note = Validator.optional(field(parts, "note"), "note", 300);
 
@@ -584,7 +601,46 @@ public final class DocumentService {
         if (mime == null || mime.isBlank() || "application/octet-stream".equals(mime)) mime = guessMime(file.filename);
         if (!ALLOWED_MIME.contains(mime))
             throw AppException.unsupportedMedia("File type not allowed - use PDF, PNG, JPEG, WebP, DOC or DOCX");
+
+        // --- FIX FOR BUG 5 / EDGE 39: Verify magic bytes to prevent spoofing ---
+        verifyMagicBytes(file.data, mime);
+
         return mime;
+    }
+
+    private static void verifyMagicBytes(byte[] data, String mime) {
+        if (data == null || data.length < 4) {
+            throw AppException.unsupportedMedia("File is too small to be a valid document");
+        }
+
+        switch (mime) {
+            case "application/pdf" -> {
+                if (data[0] != 0x25 || data[1] != 0x50 || data[2] != 0x44 || data[3] != 0x46)
+                    throw AppException.unsupportedMedia("Invalid PDF file signature");
+            }
+            case "image/png" -> {
+                if ((data[0] & 0xFF) != 0x89 || data[1] != 0x50 || data[2] != 0x4E || data[3] != 0x47)
+                    throw AppException.unsupportedMedia("Invalid PNG file signature");
+            }
+            case "image/jpeg" -> {
+                if ((data[0] & 0xFF) != 0xFF || (data[1] & 0xFF) != 0xD8 || (data[2] & 0xFF) != 0xFF)
+                    throw AppException.unsupportedMedia("Invalid JPEG file signature");
+            }
+            case "image/webp" -> {
+                if (data.length < 12 || data[0] != 0x52 || data[1] != 0x49 || data[2] != 0x46 || data[3] != 0x46 ||
+                        data[8] != 0x57 || data[9] != 0x45 || data[10] != 0x42 || data[11] != 0x50)
+                    throw AppException.unsupportedMedia("Invalid WEBP file signature");
+            }
+            case "application/msword" -> {
+                if ((data[0] & 0xFF) != 0xD0 || (data[1] & 0xFF) != 0xCF || data[2] != 0x11 || (data[3] & 0xFF) != 0xE0)
+                    throw AppException.unsupportedMedia("Invalid DOC file signature");
+            }
+            case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> {
+                if (data[0] != 0x50 || data[1] != 0x4B || data[2] != 0x03 || data[3] != 0x04)
+                    throw AppException.unsupportedMedia("Invalid DOCX file signature");
+            }
+            default -> throw AppException.unsupportedMedia("Unsupported file type");
+        }
     }
 
     private static String guessMime(String filename) {
