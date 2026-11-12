@@ -87,49 +87,55 @@ public final class DocumentService {
             throw AppException.internal("Could not encrypt file: " + e.getMessage());
         }
 
-        return db.tx(c -> {
-            UUID docId = UUID.randomUUID();
-            try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO documents (id, owner_id, folder_id, title, doc_type, description, status, review_status, expires_at, reminder_days) "
-                            + "VALUES (?,?,?,?,?,?,?,?,?,?)")) {
-                ps.setObject(1, docId);
-                ps.setObject(2, UUID.fromString(me.id));
-                ps.setObject(3, folderId);
-                ps.setString(4, fTitle);
-                ps.setString(5, docType);
-                ps.setString(6, description);
-                ps.setString(7, sensitive ? "pending_review" : "active");
-                ps.setString(8, sensitive ? "submitted" : "none");
-                ps.setObject(9, expiresAt);
-                ps.setInt(10, reminderDays);
-                ps.executeUpdate();
-            }
-            try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO document_versions (document_id, version_number, storage_key, sha256, file_size, mime_type, uploaded_by) "
-                            + "VALUES (?,1,?,?,?,?,?)")) {
-                ps.setObject(1, docId);
-                ps.setString(2, storageKey);
-                ps.setString(3, stored.sha256());
-                ps.setLong(4, stored.size());
-                ps.setString(5, mime);
-                ps.setObject(6, UUID.fromString(me.id));
-                ps.executeUpdate();
-            }
-            if (sensitive) {
+        try {
+            return db.tx(c -> {
+                UUID docId = UUID.randomUUID();
                 try (PreparedStatement ps = c.prepareStatement(
-                        "INSERT INTO admin_reviews (target_type, target_id, submitted_by, reason) VALUES ('document',?,?,?)")) {
+                        "INSERT INTO documents (id, owner_id, folder_id, title, doc_type, description, status, review_status, expires_at, reminder_days) "
+                                + "VALUES (?,?,?,?,?,?,?,?,?,?)")) {
                     ps.setObject(1, docId);
                     ps.setObject(2, UUID.fromString(me.id));
-                    ps.setString(3, "Sensitive document type '" + docType + "' requires admin review");
+                    ps.setObject(3, folderId);
+                    ps.setString(4, fTitle);
+                    ps.setString(5, docType);
+                    ps.setString(6, description);
+                    ps.setString(7, sensitive ? "pending_review" : "active");
+                    ps.setString(8, sensitive ? "submitted" : "none");
+                    ps.setObject(9, expiresAt);
+                    ps.setInt(10, reminderDays);
                     ps.executeUpdate();
                 }
-                notifyAdmins(c, "admin_review", "Sensitive document awaiting review",
-                        me.fullName + " uploaded '" + fTitle + "' (" + docType + ") - review required", "document", docId.toString());
-            }
-            audit.insert(c, UUID.fromString(me.id), "document.uploaded", "document", docId.toString(), ip, null,
-                    Json.obj("title", fTitle, "docType", docType, "size", stored.size(), "sha256", stored.sha256()));
-            return fetchOwned(c, UUID.fromString(me.id), docId);
-        });
+                try (PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO document_versions (document_id, version_number, storage_key, sha256, file_size, mime_type, uploaded_by) "
+                                + "VALUES (?,1,?,?,?,?,?)")) {
+                    ps.setObject(1, docId);
+                    ps.setString(2, storageKey);
+                    ps.setString(3, stored.sha256());
+                    ps.setLong(4, stored.size());
+                    ps.setString(5, mime);
+                    ps.setObject(6, UUID.fromString(me.id));
+                    ps.executeUpdate();
+                }
+                if (sensitive) {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "INSERT INTO admin_reviews (target_type, target_id, submitted_by, reason) VALUES ('document',?,?,?)")) {
+                        ps.setObject(1, docId);
+                        ps.setObject(2, UUID.fromString(me.id));
+                        ps.setString(3, "Sensitive document type '" + docType + "' requires admin review");
+                        ps.executeUpdate();
+                    }
+                    notifyAdmins(c, "admin_review", "Sensitive document awaiting review",
+                            me.fullName + " uploaded '" + fTitle + "' (" + docType + ") - review required", "document", docId.toString());
+                }
+                audit.insert(c, UUID.fromString(me.id), "document.uploaded", "document", docId.toString(), ip, null,
+                        Json.obj("title", fTitle, "docType", docType, "size", stored.size(), "sha256", stored.sha256()));
+                return fetchOwned(c, UUID.fromString(me.id), docId);
+            });
+        } catch (Exception e) {
+            // Orphaned file cleanup: If the DB transaction fails, delete the encrypted file
+            vault.delete(storageKey);
+            throw e;
+        }
     }
 
     // ---- list ----
@@ -366,7 +372,8 @@ public final class DocumentService {
     }
 
     // ---- versions ----
-    public Models.DocumentVersion addVersion(Models.User me, UUID docId, Map<String, Part> parts, String ip) {        Part file = parts.get("file");
+    public Models.DocumentVersion addVersion(Models.User me, UUID docId, Map<String, Part> parts, String ip) {
+        Part file = parts.get("file");
         if (file == null || file.data.length == 0) throw AppException.validation("file", "file is required");
         if (file.data.length > MAX_FILE_BYTES) throw AppException.tooLarge("File exceeds the 25 MB limit");
         String mime = resolveMime(file);
@@ -381,33 +388,39 @@ public final class DocumentService {
             throw AppException.internal("Could not encrypt file: " + e.getMessage());
         }
 
-        Models.DocumentVersion out = db.tx(c -> {
-            fetchOwned(c, UUID.fromString(me.id), docId);
-            int next;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "SELECT COALESCE(MAX(version_number), 0) + 1 AS next FROM document_versions WHERE document_id = ?")) {
-                ps.setObject(1, docId);
-                try (ResultSet rs = ps.executeQuery()) { rs.next(); next = rs.getInt("next"); }
-            }
-            try (PreparedStatement ps = c.prepareStatement(
-                    "INSERT INTO document_versions (document_id, version_number, storage_key, sha256, file_size, mime_type, note, uploaded_by) "
-                            + "VALUES (?,?,?,?,?,?,?,?)")) {
-                ps.setObject(1, docId);
-                ps.setInt(2, next);
-                ps.setString(3, storageKey);
-                ps.setString(4, stored.sha256());
-                ps.setLong(5, stored.size());
-                ps.setString(6, mime);
-                ps.setString(7, note);
-                ps.setObject(8, UUID.fromString(me.id));
-                ps.executeUpdate();
-            }
-            audit.insert(c, UUID.fromString(me.id), "document.version_added", "document", docId.toString(), ip, null,
-                    Json.obj("version", next, "sha256", stored.sha256()));
-            return fetchVersion(c, docId, next);
-        });
-        docCache.invalidate(docKey(me.id, docId));
-        return out;
+        try {
+            Models.DocumentVersion out = db.tx(c -> {
+                fetchOwned(c, UUID.fromString(me.id), docId);
+                int next;
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT COALESCE(MAX(version_number), 0) + 1 AS next FROM document_versions WHERE document_id = ?")) {
+                    ps.setObject(1, docId);
+                    try (ResultSet rs = ps.executeQuery()) { rs.next(); next = rs.getInt("next"); }
+                }
+                try (PreparedStatement ps = c.prepareStatement(
+                        "INSERT INTO document_versions (document_id, version_number, storage_key, sha256, file_size, mime_type, note, uploaded_by) "
+                                + "VALUES (?,?,?,?,?,?,?,?)")) {
+                    ps.setObject(1, docId);
+                    ps.setInt(2, next);
+                    ps.setString(3, storageKey);
+                    ps.setString(4, stored.sha256());
+                    ps.setLong(5, stored.size());
+                    ps.setString(6, mime);
+                    ps.setString(7, note);
+                    ps.setObject(8, UUID.fromString(me.id));
+                    ps.executeUpdate();
+                }
+                audit.insert(c, UUID.fromString(me.id), "document.version_added", "document", docId.toString(), ip, null,
+                        Json.obj("version", next, "sha256", stored.sha256()));
+                return fetchVersion(c, docId, next);
+            });
+            docCache.invalidate(docKey(me.id, docId));
+            return out;
+        } catch (Exception e) {
+            // Orphaned file cleanup: If the DB transaction fails, delete the encrypted file
+            vault.delete(storageKey);
+            throw e;
+        }
     }
 
     public List<Models.DocumentVersion> versions(Models.User me, UUID docId) {
