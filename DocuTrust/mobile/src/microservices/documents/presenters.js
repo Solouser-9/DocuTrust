@@ -27,10 +27,10 @@ export class DashboardPresenter extends BasePresenter {
   async load() {
     this.setLoading();
     try {
-      const [docs, expiring, shares] = await Promise.all([
+      // Removed unused 'shares' constant
+      const [docs, expiring] = await Promise.all([
         documentsApi.list({ page: 1, limit: 4, sort: 'created_at', order: 'desc' }),
         documentsApi.expiring(30),
-        documentsApi.list({ page: 1, limit: 1 }),
       ]);
       // Shared-link count comes from the shares module lazily to keep this screen snappy.
       const shareCount = await this.sharedCount();
@@ -68,7 +68,7 @@ export class DocumentsListPresenter extends BasePresenter {
 
   async load() {
     this.setLoading();
-    this.loadFolders();
+    await this.loadFolders(); // Added await
     await this.fetch();
   }
 
@@ -115,6 +115,7 @@ export class DocumentsListPresenter extends BasePresenter {
     await this.fetch();
   }
 
+  // noinspection JSUnusedGlobalSymbols
   openDetail(id) {
     this.go('DocumentDetail', { id });
   }
@@ -143,15 +144,22 @@ export class DocumentDetailPresenter extends BasePresenter {
     this.setState({ working: true });
     try {
       const uri = await documentsApi.download(
-        documentsApi.downloadUrl(doc.id),
-        doc.title.replace(/[^\w.-]+/g, '_'),
-        doc.mimeType,
+          documentsApi.downloadUrl(doc.id),
+          doc.title.replace(/[^\w.-]+/g, '_'),
+          doc.mimeType,
       );
       this.setState({ working: false });
       await shareDownloadedFile(uri, doc.mimeType);
     } catch (e) {
       this.setState({ working: false });
-      if (e && !e.message) return; // share sheet cancelled
+      if (e && !e.message) return; // share sheet canceled (US spelling)
+
+      // ---- FIX FOR CASE 27 ----
+      if (e.status === 410 || e.status === 403 || (e.message && e.message.toLowerCase().includes('expired'))) {
+        ToastStore.info('This document has expired and is no longer available.');
+        return;
+      }
+
       ToastStore.error(this.handleError(e));
     }
   }
@@ -351,14 +359,21 @@ export class VersionsPresenter extends BasePresenter {
     this.setState({ workingId: v.id });
     try {
       const uri = await documentsApi.download(
-        documentsApi.versionDownloadUrl(this.id, this.num(v)),
-        `version-${this.num(v)}`,
-        v.mimeType,
+          documentsApi.versionDownloadUrl(this.id, this.num(v)),
+          `version-${this.num(v)}`,
+          v.mimeType,
       );
       this.setState({ workingId: null });
       await shareDownloadedFile(uri, v.mimeType);
     } catch (e) {
       this.setState({ workingId: null });
+
+      // ---- FIX FOR CASE 27 ----
+      if (e.status === 410 || e.status === 403 || (e.message && e.message.toLowerCase().includes('expired'))) {
+        ToastStore.info('This document version has expired and is no longer available.');
+        return;
+      }
+
       ToastStore.error(this.handleError(e));
     }
   }
@@ -386,7 +401,7 @@ export class SearchPresenter extends BasePresenter {
   }
 
   async loadRecent() {
-    let recent = [];
+    let recent; // Removed redundant initializer
     try {
       const raw = await AsyncStorage.getItem(RECENT_KEY);
       recent = raw ? JSON.parse(raw) : [];
@@ -424,7 +439,7 @@ export class SearchPresenter extends BasePresenter {
 
   async saveRecent(term) {
     if (!term) return;
-    let recent = [];
+    let recent; // Removed redundant initializer
     try {
       const raw = await AsyncStorage.getItem(RECENT_KEY);
       recent = raw ? JSON.parse(raw) : [];
