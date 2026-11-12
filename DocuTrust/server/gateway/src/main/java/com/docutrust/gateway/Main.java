@@ -1,5 +1,8 @@
 package com.docutrust.gateway;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -28,6 +31,10 @@ import com.sun.net.httpserver.HttpServer;
 public final class Main {
     private static final String CORE_URL = base(envOrDefault("CORE_URL", "http://localhost:9000"));
     private static final String AUTH_URL = base(envOrDefault("AUTH_URL", "http://localhost:8081"));
+
+    // Protect Render's 512MB free-tier RAM from OOM crashes. 25MB matches the mobile app's
+    // MAX_FILE_BYTES. Anything larger is rejected before the body is buffered.
+    private static final long MAX_UPLOAD_SIZE = 25L * 1024 * 1024;
 
     // One shared client: connection pooling per upstream, HTTP/1.1 because the backends are
     // com.sun.net.httpserver servers, short connect timeout so a down service fails fast to 502.
@@ -70,8 +77,32 @@ public final class Main {
         String target = targetFor(method, rawPath);
         boolean responded = false;
         try {
+            // ---- Pre-check 1: Fast-fail on oversized Content-Length ----
+            String cl = ex.getRequestHeaders().getFirst("Content-Length");
+            if (cl != null) {
+                try {
+                    long contentLength = Long.parseLong(cl.trim());
+                    if (contentLength > MAX_UPLOAD_SIZE) {
+                        responded = true;
+                        sendPayloadTooLargeError(ex);
+                        System.out.printf("[gateway] %s %s -> 413 (payload %d > max %d)%n", method, rawPath, contentLength, MAX_UPLOAD_SIZE);
+                        return;
+                    }
+                } catch (NumberFormatException ignored) {
+                    // Malformed Content-Length - let the backend decide.
+                }
+            }
+
+            // ---- Pre-check 2: Bounded read for chunked transfers without Content-Length ----
+            byte[] body = readBounded(ex.getRequestBody());
+            if (body == null) {
+                responded = true;
+                sendPayloadTooLargeError(ex);
+                System.out.printf("[gateway] %s %s -> 413 (chunked payload > max %d)%n", method, rawPath, MAX_UPLOAD_SIZE);
+                return;
+            }
+
             URI upstream = URI.create(target + rawPath + (rawQuery == null ? "" : "?" + rawQuery));
-            byte[] body = ex.getRequestBody().readAllBytes();
             HttpRequest.Builder out = HttpRequest.newBuilder(upstream)
                     .timeout(Duration.ofSeconds(60))
                     .method(method, body.length == 0
@@ -125,6 +156,34 @@ public final class Main {
         }
     }
 
+    // ---- Helper: Bounded stream reader ----
+    // Reads at most MAX_UPLOAD_SIZE bytes. Returns null if the stream exceeds the limit.
+    private static byte[] readBounded(InputStream in) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int n;
+        long total = 0;
+        while ((n = in.read(chunk)) != -1) {
+            total += n;
+            if (total > MAX_UPLOAD_SIZE) {
+                return null;
+            }
+            buf.write(chunk, 0, n);
+        }
+        return buf.toByteArray();
+    }
+
+    // ---- Helper: Clean 413 error response ----
+    private static void sendPayloadTooLargeError(HttpExchange ex) throws IOException {
+        String msg = "{\"ok\":false,\"error\":{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"Request body exceeds the 25MB maximum size.\"}}";
+        byte[] err = msg.getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().set("Content-Type", "application/json");
+        ex.sendResponseHeaders(413, err.length);
+        try (var os = ex.getResponseBody()) {
+            os.write(err);
+        }
+    }
+
     // Hop-by-hop and connection-scoped headers never cross a proxy hop; Host and Content-Length
     // are recomputed by HttpClient for the rebuilt upstream request; Date and Server are stamped
     // by the receiving HttpServer. Everything else (Authorization, Content-Type, X-Step-Up-Token,
@@ -140,16 +199,14 @@ public final class Main {
     }
 
     private static boolean neverForwarded(String name) {
-        switch (name.toLowerCase()) {
-            case "connection": case "keep-alive": case "proxy-authenticate":
-            case "proxy-authorization": case "te": case "trailer":
-            case "transfer-encoding": case "upgrade": case "host":
-            case "content-length": case "expect": case "date": case "server":
-            case "x-forwarded-for": // recomputed from the live peer + client chain
-                return true;
-            default:
-                return false;
-        }
+        return switch (name.toLowerCase()) {
+            case "connection", "keep-alive", "proxy-authenticate",
+                 "proxy-authorization", "te", "trailer",
+                 "transfer-encoding", "upgrade", "host",
+                 "content-length", "expect", "date", "server",
+                 "x-forwarded-for" -> true; // recomputed from the live peer + client chain
+            default -> false;
+        };
     }
 
     private static String forwardedFor(String existingChain, String peer) {
