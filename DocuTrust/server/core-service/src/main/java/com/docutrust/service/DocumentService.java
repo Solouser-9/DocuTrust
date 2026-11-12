@@ -614,7 +614,7 @@ public final class DocumentService {
     public static String safeFilename(String title) {
         String s = title == null ? "document" : title;
         StringBuilder sb = new StringBuilder();
-        for (char ch : s.toCharArray()) sb.append(Character.isLetterOrDigit(ch) ? ch : (ch == ' ' ? '_' : '_'));
+        for (char ch : s.toCharArray()) sb.append(Character.isLetterOrDigit(ch) ? ch : '_');
         String out = sb.toString().replaceAll("_+", "_");
         return out.isBlank() ? "document" : (out.length() > 80 ? out.substring(0, 80) : out);
     }
