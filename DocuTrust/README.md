@@ -24,7 +24,7 @@
 | Run services | **3** (gateway + auth + core) — the vault-service and admin-service stubs exist but are not yet wired (Strangler Fig, next slices) |
 | Runnable artifacts | `mvn clean install` → **3 jars**: `docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar` |
 | Database | **15 tables**, migrations V01–V12, **shared** by both DB-touching services (Neon PostgreSQL) |
-| Mobile screens | 45 (registered in `mobile/src/screens/index.js`) |
+| Mobile screens | 46 (registered in `mobile/src/screens/index.js`) |
 | Numbered features | 216 (`docs/FEATURES.md`, FT-001…FT-216) + OTP security addendum (FT-217…FT-234) |
 | User roles | `admin` > `org_manager` > `member` (server-enforced) |
 | Uploads | ≤ 25 MB, allow-listed mime types, AES-256-GCM encrypted |

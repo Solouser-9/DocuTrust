@@ -14,7 +14,7 @@
 | Migrations | **12** files — applied by core-service only (auth-service's migrator is hardcoded off) | `database/migrations/` — one numbered SQL file each |
 | Runnable artifacts | **3 jars** | `mvn clean install` → `docutrust-gateway.jar` · `docutrust-auth-service.jar` · `docutrust-core-service.jar` |
 | Pinned libraries | **8** | `server/*/pom.xml` |
-| Mobile screens | **45** | `mobile/src/screens/index.js` |
+| Mobile screens | **46** | `mobile/src/screens/index.js` |
 | Numbered features | **216 + OTP addendum** | `docs/FEATURES.md` |
 | Roles | `admin` > `org_manager` > `member` | enforced in `Middleware.requireRole` (both services) |
 | Infra libraries | HikariCP 5.1.0 · Bucket4j 8.10.1 · Caffeine 3.1.8 · Dropwizard Metrics 4.2.25 · Sentry 7.14.0 | `server/*/pom.xml` |
