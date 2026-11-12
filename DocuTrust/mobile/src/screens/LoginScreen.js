@@ -19,64 +19,67 @@ export default function LoginScreen({ navigation }) {
   };
 
   const submit = () => {
+    // Guard: Prevent double-tap if already loading
+    if (state.status === 'loading') return;
     presenter.form = { ...form };
     presenter.submit();
   };
 
   return (
-    <SafeAreaView style={styles.root}>
-      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.hero}>
-            <Text style={styles.eyebrow}>DocuTrust</Text>
-            <Text style={styles.title}>Open the vault</Text>
-          </View>
-
-          <View style={styles.form}>
-            <AppInput
-              label="Email"
-              value={form.email}
-              onChangeText={change('email')}
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              error={state.fieldErrors.email}
-            />
-            <AppInput
-              label="Password"
-              value={form.password}
-              onChangeText={change('password')}
-              secure
-              error={state.fieldErrors.password}
-            />
-            <TouchableOpacity
-              onPress={() => navigation.navigate('ForgotPassword')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.forgotRow}
-            >
-              <Text style={styles.forgot}>Forgot password?</Text>
-            </TouchableOpacity>
-            {state.status === 'error' ? <Text style={styles.apiError}>{state.error}</Text> : null}
-            <AppButton
-              label="Sign in"
-              variant="solid"
-              loading={state.status === 'loading'}
-              onPress={submit}
-              style={{ marginTop: spacing(2) }}
-            />
-            <View style={styles.registerRow}>
-              <Text style={type.caption}>New to DocuTrust? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Text style={styles.link}>Create an account</Text>
-              </TouchableOpacity>
+      <SafeAreaView style={styles.root}>
+        <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.hero}>
+              <Text style={styles.eyebrow}>DocuTrust</Text>
+              <Text style={styles.title}>Open the vault</Text>
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+
+            <View style={styles.form}>
+              <AppInput
+                  label="Email"
+                  value={form.email}
+                  onChangeText={change('email')}
+                  placeholder="you@example.com"
+                  keyboardType="email-address"
+                  error={state.fieldErrors.email}
+              />
+              <AppInput
+                  label="Password"
+                  value={form.password}
+                  onChangeText={change('password')}
+                  secure
+                  error={state.fieldErrors.password}
+              />
+              <TouchableOpacity
+                  onPress={() => navigation.navigate('ForgotPassword')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.forgotRow}
+              >
+                <Text style={styles.forgot}>Forgot password?</Text>
+              </TouchableOpacity>
+              {state.status === 'error' ? <Text style={styles.apiError}>{state.error}</Text> : null}
+              <AppButton
+                  label="Sign in"
+                  variant="solid"
+                  loading={state.status === 'loading'}
+                  disabled={state.status === 'loading'} // Added explicit disabled state
+                  onPress={submit}
+                  style={{ marginTop: spacing(2) }}
+              />
+              <View style={styles.registerRow}>
+                <Text style={type.caption}>New to DocuTrust? </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Register')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.link}>Create an account</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
   );
 }
 

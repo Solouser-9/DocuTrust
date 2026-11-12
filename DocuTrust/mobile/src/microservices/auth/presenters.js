@@ -60,6 +60,7 @@ export class LoginPresenter extends BasePresenter {
   }
 
   async submit() {
+    if (this.state.status === 'loading') return; // Guard against double-submit
     const errors = validateLogin(this.form);
     if (hasErrors(errors)) {
       this.setState({ fieldErrors: errors });
@@ -86,7 +87,7 @@ export class LoginPresenter extends BasePresenter {
         return;
       }
 
-      // 2. NEW: Handle Email Not Verified
+      // 2. Handle Email Not Verified
       if (e.code === 'EMAIL_NOT_VERIFIED' || (e.message && e.message.toLowerCase().includes('verify your email'))) {
         this.setSuccess(null); // Clear loading state
         ToastStore.info('Please verify your email. We sent you a new code.');
@@ -122,6 +123,7 @@ export class RegisterPresenter extends BasePresenter {
   }
 
   async submit() {
+    if (this.state.status === 'loading') return; // Guard against double-submit
     const errors = validateRegister(this.form);
     if (hasErrors(errors)) {
       this.setState({ status: 'idle', error: null, fieldErrors: errors });
@@ -166,6 +168,7 @@ export class VerifyOtpPresenter extends BasePresenter {
   }
 
   async submit() {
+    if (this.state.status === 'loading') return; // Guard
     if (this.code.length !== 6) {
       this.setState({ fieldErrors: { code: 'Enter all six digits.' } });
       return;
@@ -189,6 +192,7 @@ export class VerifyEmailPresenter extends BasePresenter {
       this.setState({ status: 'idle' });
       return;
     }
+    if (this.state.status === 'loading') return; // Guard
     this.setLoading();
     try {
       await authApi.verifyEmail(token);
@@ -202,6 +206,7 @@ export class VerifyEmailPresenter extends BasePresenter {
 
 export class ForgotPasswordPresenter extends BasePresenter {
   async submit(email) {
+    if (this.state.status === 'loading') return; // Guard
     if (!email || !email.includes('@')) {
       this.setState({ fieldErrors: { email: 'Enter a valid email address.' } });
       return;
@@ -237,6 +242,7 @@ export class ResetPasswordPresenter extends BasePresenter {
   }
 
   async submit() {
+    if (this.state.status === 'loading') return; // Guard
     const errors = validateReset(this.form);
     if (!this.form.email || !this.form.email.includes('@')) errors.email = 'Enter the email the code was sent to.';
     if (this.form.confirmPassword !== this.form.newPassword) errors.confirmPassword = 'Passwords do not match.';
@@ -284,6 +290,7 @@ export class MfaPresenter extends BasePresenter {
 
   /** "Email me a code instead": password was already accepted, so this re-runs login with useEmailMfa. */
   async sendEmailCode() {
+    if (this.state.status === 'loading') return; // Guard
     this.setLoading();
     try {
       const { data: res } = await authApi.login({ email: this.email, password: this.password, useEmailMfa: true });
@@ -303,6 +310,7 @@ export class MfaPresenter extends BasePresenter {
   }
 
   async submit() {
+    if (this.state.status === 'loading') return; // Guard
     if (this.code.length !== 6) {
       this.setState({ fieldErrors: { code: 'Enter all six digits.' } });
       return;
@@ -351,6 +359,7 @@ export class ChangePasswordPresenter extends BasePresenter {
   }
 
   async submit() {
+    if (this.state.status === 'loading') return; // Guard
     const errors = this.validateForm();
     if (hasErrors(errors)) {
       this.setState({ fieldErrors: errors });
@@ -383,6 +392,7 @@ export class ChangePasswordPresenter extends BasePresenter {
 
   /** Second phase: the user typed the emailed code -> trade it for a step-up token and retry. */
   async confirmStepUp(code) {
+    if (this.state.status === 'loading') return; // Guard
     const errors = this.validateForm();
     if (hasErrors(errors)) {
       this.setState({ fieldErrors: errors });
@@ -417,6 +427,7 @@ export class SecurityMfaPresenter extends BasePresenter {
   }
 
   async startSetup() {
+    if (this.state.status === 'loading') return; // Guard
     this.setLoading();
     try {
       const res = await authApi.mfaSetup();
@@ -430,7 +441,7 @@ export class SecurityMfaPresenter extends BasePresenter {
   }
 
   async confirm(code) {
-    if (!this.secret) return;
+    if (!this.secret || this.state.status === 'loading') return; // Guard
     this.setLoading();
     try {
       await authApi.mfaEnable(this.secret, code);
@@ -446,6 +457,7 @@ export class SecurityMfaPresenter extends BasePresenter {
   }
 
   async disable(code) {
+    if (this.state.status === 'loading') return; // Guard
     this.setLoading();
     try {
       await authApi.mfaDisable(code);
