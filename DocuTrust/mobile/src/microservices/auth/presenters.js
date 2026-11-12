@@ -66,17 +66,37 @@ export class LoginPresenter extends BasePresenter {
       return;
     }
     this.setLoading();
+
     try {
-      const { data: res } = await authApi.login({ email: this.form.email.trim().toLowerCase(), password: this.form.password });
+      const { data: res } = await authApi.login({
+        email: this.form.email.trim().toLowerCase(),
+        password: this.form.password,
+      });
       this.setSuccess(res.user);
       await AuthStore.setSession(userFromApi(res.user), res.accessToken, res.refreshToken);
       // Root gate switches to the main stack once the session lands.
     } catch (e) {
+      // 1. Handle MFA_REQUIRED
       if (e.code === 'MFA_REQUIRED') {
         this.setSuccess(null);
-        this.go('Mfa', { email: this.form.email.trim().toLowerCase(), password: this.form.password });
+        this.go('Mfa', {
+          email: this.form.email.trim().toLowerCase(),
+          password: this.form.password,
+        });
         return;
       }
+
+      // 2. NEW: Handle Email Not Verified
+      if (e.code === 'EMAIL_NOT_VERIFIED' || (e.message && e.message.toLowerCase().includes('verify your email'))) {
+        this.setSuccess(null); // Clear loading state
+        ToastStore.info('Please verify your email. We sent you a new code.');
+        this.go('VerifyOtp', {
+          email: this.form.email.trim().toLowerCase(),
+        });
+        return;
+      }
+
+      // 3. Standard Error Handling
       const message = this.handleError(e);
       this.setError(message);
       const fieldErrors = e.field ? { [e.field]: message } : {};
