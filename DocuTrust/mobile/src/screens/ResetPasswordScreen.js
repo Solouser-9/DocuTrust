@@ -9,6 +9,7 @@ import AppButton from '../components/AppButton';
 import AppInput from '../components/AppInput';
 import Screen from '../components/Screen';
 import StampBadge from '../components/StampBadge';
+import CodeBoxes from '../components/CodeBoxes';
 
 export default function ResetPasswordScreen({ navigation, route }) {
   const [state, presenter] = usePresenter(() => new ResetPasswordPresenter(navigation));
@@ -19,7 +20,11 @@ export default function ResetPasswordScreen({ navigation, route }) {
     const email = route && route.params && route.params.email;
     if (email) {
       presenter.configure(email);
-      setForm((f) => ({ ...f, email }));
+      setForm((prevForm) => {
+        const newForm = { ...prevForm };
+        newForm.email = email;
+        return newForm;
+      });
     }
   }, [presenter, route]);
 
@@ -54,9 +59,19 @@ export default function ResetPasswordScreen({ navigation, route }) {
             <View>
               <Text style={styles.body}>Paste the 6-digit code from your email, then choose a fresh password. The code expires in 10 minutes.</Text>
               <AppInput label="Account email" value={form.email} onChangeText={change('email')} keyboardType="email-address" error={state.fieldErrors.email} placeholder="you@example.com" autoCapitalize="none" />
-              <AppInput label="Reset code" value={form.code} onChangeText={(v) => change('code')(v.replace(/\D/g, '').slice(0, 6))} error={state.fieldErrors.code} placeholder="000000" keyboardType="number-pad" />
+
+              <Text style={styles.label}>Reset code</Text>
+              <CodeBoxes
+                  code={form.code}
+                  onChangeText={(v) => change('code')(v.replace(/\D/g, '').slice(0, 6))}
+                  onSubmitEditing={submit}
+                  accessibilityLabel="6-digit reset code"
+              />
+              {state.fieldErrors.code ? <Text style={styles.error}>{state.fieldErrors.code}</Text> : null}
+
               <AppInput label="New password" value={form.newPassword} onChangeText={change('newPassword')} secure error={state.fieldErrors.newPassword} hint="At least 8 characters with letters and numbers." />
               <AppInput label="Repeat new password" value={form.confirmPassword} onChangeText={change('confirmPassword')} secure error={state.fieldErrors.confirmPassword} />
+
               {state.status === 'error' ? <Text style={styles.error}>{state.error}</Text> : null}
 
               <AppButton label="Reset password" variant="amber" loading={state.status === 'loading'} onPress={submit} />
@@ -73,6 +88,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   body: { ...type.body, lineHeight: 24, marginBottom: spacing(4) },
   stampRow: { marginBottom: spacing(4) },
+  label: { ...type.micro, marginBottom: spacing(2) },
   error: { color: palette.coralText, fontSize: 13, marginBottom: spacing(2) },
   resendBtn: { alignSelf: 'center', marginTop: spacing(4) },
   resendText: { color: palette.amberText, fontWeight: '600', fontSize: 14 },

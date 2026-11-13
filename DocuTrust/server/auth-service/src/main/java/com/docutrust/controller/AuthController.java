@@ -24,10 +24,8 @@ public final class AuthController {
     public Handler register() {
         return ctx -> {
             AuthService.RegisterResult result = auth.register(ctx.json(), ctx.ip(), ctx.userAgent());
-            if (result.devOtp() != null && mail.devMode())
-                ctx.created(result.body(), Map.of("X-Dev-OTP", result.devOtp()));
-            else
-                ctx.created(result.body());
+            if (result.devOtp() != null && mail.devMode()) ctx.created(result.body(), Map.of("X-Dev-OTP", result.devOtp()));
+            else ctx.created(result.body());
         };
     }
 
@@ -36,16 +34,8 @@ public final class AuthController {
             AuthService.LoginResult r = auth.login(ctx.json(), ctx.ip(), ctx.userAgent());
             if (r.mfaChallenge() != null) {
                 if (r.devOtp() != null) ctx.raw(440, "application/json; charset=utf-8",
-                        Json.write(Json.obj("ok", false,
-                                "error", Json.obj("code", "MFA_EMAIL_CHALLENGE",
-                                        "message", "A 6-digit code was emailed to you - POST it with the challenge to /api/auth/verify-otp"),
-                                "challenge", r.mfaChallenge(), "email", r.maskedEmail())).getBytes(),
-                        Map.of("X-Dev-OTP", r.devOtp()));
-                else
-                    ctx.respondMap(440, Json.obj("ok", false,
-                            "error", Json.obj("code", "MFA_EMAIL_CHALLENGE",
-                                    "message", "A 6-digit code was emailed to you - POST it with the challenge to /api/auth/verify-otp"),
-                            "challenge", r.mfaChallenge(), "email", r.maskedEmail()));
+                        Json.write(Json.obj("ok", false, "error", Json.obj("code", "MFA_EMAIL_CHALLENGE", "message", "A 6-digit code was emailed to you - POST it with the challenge to /api/auth/verify-otp"), "challenge", r.mfaChallenge(), "email", r.maskedEmail())).getBytes(), Map.of("X-Dev-OTP", r.devOtp()));
+                else ctx.respondMap(440, Json.obj("ok", false, "error", Json.obj("code", "MFA_EMAIL_CHALLENGE", "message", "A 6-digit code was emailed to you - POST it with the challenge to /api/auth/verify-otp"), "challenge", r.mfaChallenge(), "email", r.maskedEmail()));
                 return;
             }
             ctx.ok(r.body());
@@ -55,10 +45,8 @@ public final class AuthController {
     public Handler verifyOtp() {
         return ctx -> {
             Map<String, Object> body = ctx.json();
-            if (Ctx.str(body, "email") != null)
-                ctx.ok(auth.verifyRegistrationOtp(Ctx.str(body, "email"), Ctx.str(body, "otp"), ctx.ip(), ctx.userAgent()));
-            else
-                ctx.ok(auth.verifyOtp(Ctx.str(body, "challenge"), Ctx.str(body, "code"), ctx.ip(), ctx.userAgent()));
+            if (Ctx.str(body, "email") != null) ctx.ok(auth.verifyRegistrationOtp(Ctx.str(body, "email"), Ctx.str(body, "otp"), ctx.ip(), ctx.userAgent()));
+            else ctx.ok(auth.verifyOtp(Ctx.str(body, "challenge"), Ctx.str(body, "code"), ctx.ip(), ctx.userAgent()));
         };
     }
 
@@ -71,27 +59,18 @@ public final class AuthController {
         };
     }
 
-    public Handler refresh() {
-        return ctx -> ctx.ok(auth.refresh(ctx.json(), ctx.ip(), ctx.userAgent()));
-    }
-
-    public Handler logout() {
-        return ctx -> { auth.logout(ctx.json()); ctx.noContent(); };
-    }
+    public Handler refresh() { return ctx -> ctx.ok(auth.refresh(ctx.json(), ctx.ip(), ctx.userAgent())); }
+    public Handler logout() { return ctx -> { auth.logout(ctx.json()); ctx.noContent(); }; }
 
     public Handler forgotPassword() {
         return ctx -> {
             AuthService.ForgotResult r = auth.forgotPassword(ctx.json(), ctx.ip());
-            if (r.devOtp() != null && mail.devMode())
-                ctx.ok(r.body(), Map.of("X-Dev-OTP", r.devOtp()));
-            else
-                ctx.ok(r.body());
+            if (r.devOtp() != null && mail.devMode()) ctx.ok(r.body(), Map.of("X-Dev-OTP", r.devOtp()));
+            else ctx.ok(r.body());
         };
     }
 
-    public Handler resetPasswordOtp() {
-        return ctx -> { auth.resetPasswordOtp(ctx.json(), ctx.ip()); ctx.noContent(); };
-    }
+    public Handler resetPasswordOtp() { return ctx -> { auth.resetPasswordOtp(ctx.json(), ctx.ip()); ctx.noContent(); }; }
 
     public Handler requestStepUp() {
         return ctx -> {
@@ -101,21 +80,10 @@ public final class AuthController {
         };
     }
 
-    public Handler verifyStepUp() {
-        return ctx -> ctx.ok(stepUps.verify(ctx.user, Ctx.str(ctx.json(), "code"), ctx.ip()));
-    }
-
-    public Handler verifyEmail() {
-        return ctx -> ctx.ok(auth.verifyEmail(ctx.q("token")));
-    }
-
-    public Handler me() {
-        return ctx -> ctx.ok(Map.of("user", auth.get(UUID.fromString(ctx.user.id)).toMap()));
-    }
-
-    public Handler sessions() {
-        return ctx -> ctx.ok(auth.listSessions(UUID.fromString(ctx.user.id)));
-    }
+    public Handler verifyStepUp() { return ctx -> ctx.ok(stepUps.verify(ctx.user, Ctx.str(ctx.json(), "code"), ctx.ip())); }
+    public Handler verifyEmail() { return ctx -> ctx.ok(auth.verifyEmail(ctx.q("token"))); }
+    public Handler me() { return ctx -> ctx.ok(Map.of("user", auth.get(UUID.fromString(ctx.user.id)).toMap())); }
+    public Handler sessions() { return ctx -> ctx.ok(auth.listSessions(UUID.fromString(ctx.user.id))); }
 
     public Handler revokeSession() {
         return ctx -> {
@@ -125,26 +93,13 @@ public final class AuthController {
         };
     }
 
-    public Handler updateMe() {
-        return ctx -> ctx.ok(Map.of("user", auth.updateMe(UUID.fromString(ctx.user.id), ctx.json())));
-    }
+    public Handler updateMe() { return ctx -> ctx.ok(Map.of("user", auth.updateMe(UUID.fromString(ctx.user.id), ctx.json()))); }
 
     public Handler changePassword() {
-        return ctx -> {
-            auth.changePassword(UUID.fromString(ctx.user.id), ctx.json(), ctx.header(StepUpService.HEADER), ctx.ip());
-            ctx.noContent();
-        };
+        return ctx -> { auth.changePassword(UUID.fromString(ctx.user.id), ctx.json(), ctx.header(StepUpService.HEADER), ctx.ip()); ctx.noContent(); };
     }
 
-    public Handler mfaSetup() {
-        return ctx -> ctx.ok(auth.mfaSetup(UUID.fromString(ctx.user.id), ctx.user.email));
-    }
-
-    public Handler mfaEnable() {
-        return ctx -> ctx.ok(auth.mfaEnable(UUID.fromString(ctx.user.id), ctx.json()));
-    }
-
-    public Handler mfaDisable() {
-        return ctx -> ctx.ok(auth.mfaDisable(UUID.fromString(ctx.user.id), ctx.json()));
-    }
+    public Handler mfaSetup() { return ctx -> ctx.ok(auth.mfaSetup(UUID.fromString(ctx.user.id), ctx.user.email)); }
+    public Handler mfaEnable() { return ctx -> ctx.ok(auth.mfaEnable(UUID.fromString(ctx.user.id), ctx.json())); }
+    public Handler mfaDisable() { return ctx -> ctx.ok(auth.mfaDisable(UUID.fromString(ctx.user.id), ctx.json())); }
 }

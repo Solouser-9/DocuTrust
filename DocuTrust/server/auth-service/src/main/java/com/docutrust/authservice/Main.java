@@ -37,17 +37,21 @@ public final class Main {
             String initSql = null;
             if (cfg.dbSchema != null && !cfg.dbSchema.isBlank()) {
                 String schema = cfg.dbSchema.replaceAll("[^A-Za-z0-9_]", "");
+
+                // Using .concat() prevents IntelliJ from freaking out
+                String createSchemaSql = "CREATE SCHEMA IF NOT EXISTS ".concat(schema);
+
                 java.sql.Connection conn = null;
                 try {
                     conn = cfg.dbUser == null ? java.sql.DriverManager.getConnection(cfg.dbUrl)
                             : java.sql.DriverManager.getConnection(cfg.dbUrl, cfg.dbUser, cfg.dbPassword);
                     try (var st = conn.createStatement()) {
-                        st.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
+                        st.execute(createSchemaSql);
                     }
                 } finally {
                     if (conn != null) try { conn.close(); } catch (Exception ignored) {}
                 }
-                initSql = "SET search_path TO " + schema + ", public";
+                initSql = "SET search_path TO ".concat(schema).concat(", public");
             }
             Database db = new Database(cfg.dbUrl, cfg.dbUser, cfg.dbPassword, 2, cfg.dbPoolMax, initSql);
             System.out.println("[auth-service] migrations skipped (auth-service never runs migrations)");
@@ -69,22 +73,19 @@ public final class Main {
             AuthController authC = new AuthController(auth, stepUps, mail);
             HealthController healthC = new HealthController(db, cfg);
 
-            // ---- public: health ----
             router.publicRoute("GET", "/api/health", healthC.health());
 
-            // ---- public: auth ----
             router.rateLimited("POST", "/api/auth/register", "auth", authC.register());
             router.rateLimited("POST", "/api/auth/login", "auth", authC.login());
             router.rateLimited("POST", "/api/auth/forgot-password", "auth", authC.forgotPassword());
             router.rateLimited("POST", "/api/auth/reset-password-otp", "auth", authC.resetPasswordOtp());
             router.rateLimited("POST", "/api/auth/verify-otp", "auth", authC.verifyOtp());
-            router.rateLimited("POST", "/api/auth/resend-otp", "auth", authC.resendOtp()); // <-- NEW ROUTE
+            router.rateLimited("POST", "/api/auth/resend-otp", "auth", authC.resendOtp());
 
             router.publicRoute("POST", "/api/auth/refresh", authC.refresh());
             router.publicRoute("POST", "/api/auth/logout", authC.logout());
             router.publicRoute("GET", "/api/auth/verify-email", authC.verifyEmail());
 
-            // ---- auth ----
             router.auth("GET", "/api/auth/me", authC.me());
             router.auth("PATCH", "/api/auth/me", authC.updateMe());
             router.auth("GET", "/api/auth/sessions", authC.sessions());
@@ -106,9 +107,7 @@ public final class Main {
                 server.stop(0);
                 db.close();
             }));
-            System.out.println("[auth-service] ready on port " + port
-                    + " (routes=" + router.routeCount()
-                    + ", db=" + (db.healthy() ? "up" : "DOWN") + ")");
+            System.out.println("[auth-service] ready on port " + port + " (routes=" + router.routeCount() + ", db=" + (db.healthy() ? "up" : "DOWN") + ")");
             Thread.currentThread().join();
         } catch (Exception e) {
             System.err.println("[auth-service] fatal: " + e.getMessage());

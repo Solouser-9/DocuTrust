@@ -14,34 +14,16 @@ export default function VerifyOtpScreen({ navigation, route }) {
     const email = (route && route.params && route.params.email) || '';
     const code = (state.data && state.data.code) || '';
 
-    useEffect(() => {
-        presenter.configure(email);
-    }, [email, presenter]);
-
+    useEffect(() => { presenter.configure(email); }, [email, presenter]);
     const submit = () => presenter.submit();
 
     return (
         <Screen title="Verify your email" eyebrow="Single-use code" onBack={() => navigation.goBack()}>
-            <Text style={styles.body}>
-                Enter the 6-digit code we sent to {email || 'your email address'}. It expires in 10 minutes.
-            </Text>
-            <CodeBoxes
-                code={code}
-                onChangeText={(value) => presenter.setCode(value)}
-                onSubmitEditing={submit}
-                accessibilityLabel="6-digit verification code"
-            />
+            <Text style={styles.body}>Enter the 6-digit code we sent to {email || 'your email address'}. It expires in 10 minutes.</Text>
+            <CodeBoxes code={code} onChangeText={(value) => presenter.setCode(value)} onSubmitEditing={submit} accessibilityLabel="6-digit verification code" />
             {state.fieldErrors.code ? <Text style={styles.error}>{state.fieldErrors.code}</Text> : null}
             {state.status === 'error' ? <Text style={styles.error}>{state.error}</Text> : null}
-
-            <AppButton
-                label="Verify and continue"
-                variant="amber"
-                loading={state.status === 'loading'}
-                onPress={submit}
-                disabled={code.length !== 6}
-            />
-
+            <AppButton label="Verify and continue" variant="amber" loading={state.status === 'loading'} onPress={submit} disabled={code.length !== 6} />
             <TouchableOpacity onPress={() => presenter.resend()} disabled={state.status === 'loading'} style={styles.resendBtn}>
                 <Text style={styles.resendText}>Didn't receive the code? Resend</Text>
             </TouchableOpacity>
