@@ -9,7 +9,6 @@ import AppButton from '../components/AppButton';
 import Screen from '../components/Screen';
 import CodeBoxes from '../components/CodeBoxes';
 
-// MFA challenge during login.
 export default function MfaScreen({ navigation, route }) {
   const [state, presenter] = usePresenter(() => new MfaPresenter(navigation));
   const code = (state.data && state.data.code) || '';
@@ -24,51 +23,61 @@ export default function MfaScreen({ navigation, route }) {
   const submit = () => presenter.submit();
 
   return (
-    <Screen
-      title={mode === 'email' ? 'Email code' : 'Authenticator code'}
-      eyebrow="Two-factor check"
-      onBack={() => navigation.goBack()}
-    >
-      <Text style={styles.body}>
-        {mode === 'email'
-          ? `We emailed a 6-digit code to ${pendingEmail || 'your address'}. Enter it to finish signing in.`
-          : pendingEmail
-            ? `Enter the six-digit code for ${pendingEmail}.`
-            : 'Enter the six-digit code from your authenticator app.'}
-      </Text>
+      <Screen
+          title={mode === 'email' ? 'Email code' : 'Authenticator code'}
+          eyebrow="Two-factor check"
+          onBack={() => navigation.goBack()}
+      >
+        <Text style={styles.body}>
+          {mode === 'email'
+              ? `We emailed a 6-digit code to ${pendingEmail || 'your address'}. Enter it to finish signing in.`
+              : pendingEmail
+                  ? `Enter the six-digit code for ${pendingEmail}.`
+                  : 'Enter the six-digit code from your authenticator app.'}
+        </Text>
 
-      <CodeBoxes
-        code={code}
-        onChangeText={(value) => presenter.setCode(value)}
-        onSubmitEditing={submit}
-        accessibilityLabel="MFA sign-in code"
-      />
-
-      {state.fieldErrors.code ? <Text style={styles.error}>{state.fieldErrors.code}</Text> : null}
-      {state.status === 'error' ? <Text style={styles.error}>{state.error}</Text> : null}
-
-      <AppButton
-        label="Verify and continue"
-        variant="amber"
-        loading={state.status === 'loading'}
-        onPress={submit}
-        disabled={code.length !== 6}
-      />
-      {mode === 'totp' ? (
-        <AppButton
-          label="Email me a code instead"
-          variant="ghost"
-          loading={state.status === 'loading'}
-          onPress={() => presenter.sendEmailCode()}
-          style={{ marginTop: spacing(2.5) }}
+        <CodeBoxes
+            code={code}
+            onChangeText={(value) => presenter.setCode(value)}
+            onSubmitEditing={submit}
+            accessibilityLabel="MFA sign-in code"
         />
-      ) : null}
-      <Text style={[type.caption, { marginTop: spacing(3) }]}>
-        {mode === 'email'
-          ? 'The emailed code expires in 10 minutes and works once. Request a fresh one if it expired.'
-          : 'Codes rotate every 30 seconds. Wait for the next one if yours was just rejected.'}
-      </Text>
-    </Screen>
+
+        {state.fieldErrors.code ? <Text style={styles.error}>{state.fieldErrors.code}</Text> : null}
+        {state.status === 'error' ? <Text style={styles.error}>{state.error}</Text> : null}
+
+        <AppButton
+            label="Verify and continue"
+            variant="amber"
+            loading={state.status === 'loading'}
+            onPress={submit}
+            disabled={code.length !== 6}
+        />
+
+        {mode === 'totp' ? (
+            <AppButton
+                label="Email me a code instead"
+                variant="ghost"
+                loading={state.status === 'loading'}
+                onPress={() => presenter.sendEmailCode()}
+                style={{ marginTop: spacing(2.5) }}
+            />
+        ) : (
+            <AppButton
+                label="Didn't receive it? Resend code"
+                variant="ghost"
+                loading={state.status === 'loading'}
+                onPress={() => presenter.sendEmailCode()}
+                style={{ marginTop: spacing(2.5) }}
+            />
+        )}
+
+        <Text style={[type.caption, { marginTop: spacing(3) }]}>
+          {mode === 'email'
+              ? 'The emailed code expires in 10 minutes and works once.'
+              : 'Codes rotate every 30 seconds. Wait for the next one if yours was just rejected.'}
+        </Text>
+      </Screen>
   );
 }
 

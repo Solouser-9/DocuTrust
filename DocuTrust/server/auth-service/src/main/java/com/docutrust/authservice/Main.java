@@ -24,11 +24,6 @@ import com.docutrust.util.Text;
 import com.docutrust.vault.FileVault;
 import com.sun.net.httpserver.HttpServer;
 
-// Composition root for auth-service (Phase 2): serves the 18 /api/auth/* routes extracted from
-// core-service plus its own /api/health. It NEVER runs migrations (the skip below is hardcoded,
-// regardless of MIGRATOR_ENABLED - core-service owns schema changes) and never seeds demo data
-// (Bootstrap stays in core-service). Run from server/ so VAULT_DIR resolves to the same absolute
-// path as core-service and MFA secret decryption works across services.
 public final class Main {
     private Main() {}
 
@@ -42,19 +37,21 @@ public final class Main {
             String initSql = null;
             if (cfg.dbSchema != null && !cfg.dbSchema.isBlank()) {
                 String schema = cfg.dbSchema.replaceAll("[^A-Za-z0-9_]", "");
-                try (var c = cfg.dbUser == null ? java.sql.DriverManager.getConnection(cfg.dbUrl)
-                        : java.sql.DriverManager.getConnection(cfg.dbUrl, cfg.dbUser, cfg.dbPassword);
-                     var st = c.createStatement()) {
-                    st.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
+                java.sql.Connection conn = null;
+                try {
+                    conn = cfg.dbUser == null ? java.sql.DriverManager.getConnection(cfg.dbUrl)
+                            : java.sql.DriverManager.getConnection(cfg.dbUrl, cfg.dbUser, cfg.dbPassword);
+                    try (var st = conn.createStatement()) {
+                        st.execute("CREATE SCHEMA IF NOT EXISTS " + schema);
+                    }
+                } finally {
+                    if (conn != null) try { conn.close(); } catch (Exception ignored) {}
                 }
                 initSql = "SET search_path TO " + schema + ", public";
             }
             Database db = new Database(cfg.dbUrl, cfg.dbUser, cfg.dbPassword, 2, cfg.dbPoolMax, initSql);
-            // Hardcoded skip: auth-service NEVER runs migrations, whatever MIGRATOR_ENABLED says.
             System.out.println("[auth-service] migrations skipped (auth-service never runs migrations)");
 
-            // Wiring order matters: every constructor argument must already exist when its consumer
-            // is built (same sequence as core-service Main).
             FileVault vault = new FileVault(Path.of(cfg.vaultDir), Text.b64decode(cfg.vaultKey));
             PasswordService passwords = new PasswordService();
             JwtService jwt = new JwtService(cfg.jwtSecret);
@@ -75,12 +72,14 @@ public final class Main {
             // ---- public: health ----
             router.publicRoute("GET", "/api/health", healthC.health());
 
-            // ---- public: auth (login/register/forgot/reset rate limited) ----
+            // ---- public: auth ----
             router.rateLimited("POST", "/api/auth/register", "auth", authC.register());
             router.rateLimited("POST", "/api/auth/login", "auth", authC.login());
             router.rateLimited("POST", "/api/auth/forgot-password", "auth", authC.forgotPassword());
             router.rateLimited("POST", "/api/auth/reset-password-otp", "auth", authC.resetPasswordOtp());
             router.rateLimited("POST", "/api/auth/verify-otp", "auth", authC.verifyOtp());
+            router.rateLimited("POST", "/api/auth/resend-otp", "auth", authC.resendOtp()); // <-- NEW ROUTE
+
             router.publicRoute("POST", "/api/auth/refresh", authC.refresh());
             router.publicRoute("POST", "/api/auth/logout", authC.logout());
             router.publicRoute("GET", "/api/auth/verify-email", authC.verifyEmail());
@@ -97,8 +96,6 @@ public final class Main {
             router.auth("POST", "/api/auth/mfa/enable", authC.mfaEnable());
             router.auth("POST", "/api/auth/mfa/disable", authC.mfaDisable());
 
-            // PORT is read from the process environment with default 8081 (not cfg.port), so a
-            // PORT value in .env (meant for another service) can never leak into auth-service.
             int port = Integer.parseInt(System.getenv().getOrDefault("PORT", "8081"));
             HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
             server.createContext("/", router);

@@ -24,8 +24,6 @@ import com.docutrust.util.Text;
 import com.docutrust.util.Validator;
 import com.docutrust.vault.FileVault;
 
-// Auth domain: register/login with MFA (TOTP or email-OTP fallback), rotating refresh,
-// OTP password reset + email verify, profile, TOTP setup, step-up gated password change.
 public final class AuthService {
     private final Database db;
     private final PasswordService passwords;
@@ -56,12 +54,8 @@ public final class AuthService {
         migratePlaintextMfaSecrets();
     }
 
-    /** Login outcome: either tokens (mfaChallenge == null) or an email-MFA challenge to complete via /api/auth/verify-otp. */
     public record LoginResult(Map<String, Object> body, String mfaChallenge, String maskedEmail, String devOtp) {}
-
-    /** forgotPassword outcome: public body + the dev-mode code the controller may echo via X-Dev-OTP. */
     public record ForgotResult(Map<String, Object> body, String devOtp) {}
-    /** Registration outcome: public body + the dev-mode code the controller may echo via X-Dev-OTP. */
     public record RegisterResult(Map<String, Object> body, String devOtp) {}
     private record RegistrationCreated(Map<String, Object> body, String otp) {}
 
@@ -108,7 +102,6 @@ public final class AuthService {
                     u = Rows.user(rs);
                 }
             }
-            // H-3: the profile screen renders user.orgName - the user row never carried it.
             if (u.orgId != null) {
                 try (PreparedStatement ps = c.prepareStatement("SELECT name FROM organisations WHERE id = ?")) {
                     ps.setObject(1, UUID.fromString(u.orgId));
@@ -119,7 +112,6 @@ public final class AuthService {
         });
     }
 
-    // ---- register ----
     public RegisterResult register(Map<String, Object> b, String ip, String userAgent) {
         String email = Validator.email(Ctx.str(b, "email"));
         String password = Validator.password(Ctx.str(b, "password"));
@@ -139,7 +131,11 @@ public final class AuthService {
             if (orgName != null) {
                 try (PreparedStatement ps = c.prepareStatement("INSERT INTO organisations (name) VALUES (?) RETURNING id")) {
                     ps.setString(1, orgName);
-                    try (ResultSet rs = ps.executeQuery()) { rs.next(); orgId = rs.getString("id"); }
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            orgId = rs.getString("id");
+                        }
+                    }
                 }
                 role = "org_manager";
             }
@@ -167,7 +163,6 @@ public final class AuthService {
         return new RegisterResult(created.body(), mail.devMode() ? created.otp() : null);
     }
 
-    // ---- login ----
     public LoginResult login(Map<String, Object> b, String ip, String userAgent) {
         String email = Validator.email(Ctx.str(b, "email"));
         String password = Ctx.str(b, "password");
@@ -184,9 +179,6 @@ public final class AuthService {
         if ("pending".equals(cu.user.status)) throw new AppException(403, "EMAIL_VERIFICATION_REQUIRED", "Verify your email address before signing in");
         if (cu.user.mfaEnabled) {
             if (useEmailMfa) {
-                // Email MFA fallback (Phase 4): the TOTP device is unavailable, so the second
-                // factor is a 6-digit OTP to the account's address. The 10-minute challenge JWT
-                // only proves "password+email factor done" - it carries no session authority.
                 String code = db.tx(c -> otps.issue(c, OtpService.PURPOSE_MFA_LOGIN, userId, null, cu.user.email));
                 audit.insert(userId, "auth.mfa_email_challenge", "user", userId.toString(), ip, userAgent, Json.obj());
                 mail.sendOtp(cu.user.email, OtpService.PURPOSE_MFA_LOGIN, code, OtpService.TTL_MINUTES);
@@ -209,7 +201,6 @@ public final class AuthService {
         return new LoginResult(Json.obj("user", cu.user.toMap(), "accessToken", t.accessToken, "refreshToken", t.refreshToken), null, null, null);
     }
 
-    /** Phase 4 completion: exchanges an mfa_challenge JWT + emailed OTP for the real session tokens. */
     public Map<String, Object> verifyOtp(String challenge, String code, String ip, String userAgent) {
         if (challenge == null || challenge.isBlank()) throw AppException.validation("challenge", "challenge is required");
         JwtService.Claims claims;
@@ -222,7 +213,7 @@ public final class AuthService {
         }
         if (!"mfa_challenge".equals(claims.typ)) throw AppException.unauthorized("Invalid sign-in challenge");
         UUID userId = UUID.fromString(claims.sub);
-        Models.User u = get(userId); // 404 if gone; suspended check below
+        Models.User u = get(userId);
         if ("suspended".equals(u.status)) throw new AppException(403, "ACCOUNT_SUSPENDED", "Account suspended - contact support");
         db.tx(c -> otps.verify(c, OtpService.PURPOSE_MFA_LOGIN, userId, null, u.email, code));
         db.tx(c -> {
@@ -237,7 +228,6 @@ public final class AuthService {
         return Json.obj("user", u.toMap(), "accessToken", t.accessToken, "refreshToken", t.refreshToken);
     }
 
-    /** Verifies a registration email OTP, activates the pending account and creates its session. */
     public Map<String, Object> verifyRegistrationOtp(String email, String code, String ip, String userAgent) {
         String validatedEmail = Validator.email(email);
         return db.tx(c -> {
@@ -269,6 +259,43 @@ public final class AuthService {
             Models.User fresh = fetchUser(c, userId);
             return Json.obj("user", fresh.toMap(),
                     "accessToken", t.accessToken, "refreshToken", t.refreshToken);
+        });
+    }
+
+    // ---- NEW: Resend OTP ----
+    public void resendOtp(String email) {
+        if (email == null || email.isBlank()) return;
+        String validatedEmail = email.trim().toLowerCase();
+
+        db.tx(c -> {
+            UUID userId = null;
+            String status = null;
+            try (PreparedStatement ps = c.prepareStatement("SELECT id, status FROM users WHERE email = ?")) {
+                ps.setString(1, validatedEmail);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        userId = UUID.fromString(rs.getString("id"));
+                        status = rs.getString("status");
+                    }
+                }
+            }
+            // If user doesn't exist, return silently to prevent enumeration
+            if (userId == null) return null;
+
+            String code;
+            String purpose;
+
+            // Smart Context: If pending, it's a registration OTP. If active, it's a password reset OTP.
+            if ("pending".equals(status)) {
+                purpose = OtpService.PURPOSE_REGISTRATION;
+                code = otps.issue(c, purpose, userId, null, validatedEmail);
+                mail.sendOtp(validatedEmail, purpose, code, OtpService.TTL_MINUTES);
+            } else {
+                purpose = OtpService.PURPOSE_PASSWORD_RESET;
+                code = otps.issue(c, purpose, userId, null, validatedEmail);
+                mail.sendOtp(validatedEmail, purpose, code, OtpService.TTL_MINUTES);
+            }
+            return null;
         });
     }
 
@@ -305,8 +332,6 @@ public final class AuthService {
             return code;
         });
         if (devCode != null) mail.sendOtp(email, OtpService.PURPOSE_PASSWORD_RESET, devCode, OtpService.TTL_MINUTES);
-        // devCode is surfaced only via the X-Dev-OTP header by the controller - the body never
-        // carries a code again (the old resetCode-in-response pattern is gone for good).
         return new ForgotResult(Json.obj("message", "If that email exists, a reset code has been sent"), devCode);
     }
 
@@ -330,7 +355,7 @@ public final class AuthService {
                 ps.setObject(2, userId);
                 ps.executeUpdate();
             }
-            tokens.revokeAllForUser(c, userId); // every session dies with the password
+            tokens.revokeAllForUser(c, userId);
             audit.insert(c, userId, "auth.password_reset", "user", userId.toString(), ip, null, Json.obj("via", "email_otp"));
             return null;
         });
@@ -377,8 +402,6 @@ public final class AuthService {
     }
 
     public void changePassword(UUID userId, Map<String, Object> b, String stepUpToken, String ip) {
-        // Phase 3: changing a password is exactly the moment an attacker with a stolen session
-        // would strike, so it demands a fresh second factor on top of the bearer token.
         stepUps.authorize(stepUpToken, db.with(c -> fetchUser(c, userId)));
         String current = Ctx.str(b, "currentPassword");
         String next = Validator.password(Ctx.str(b, "newPassword"));
@@ -532,7 +555,6 @@ public final class AuthService {
         return token;
     }
 
-    /** Marks a one-time token (reset code / verify token) as used; returns its user or null. */
     private UUID consumeToken(Connection c, String codeHash) throws Exception {
         UUID userId = null;
         Timestamp expiresAt = null;
@@ -569,7 +591,6 @@ public final class AuthService {
         return userAgent.length() > 120 ? userAgent.substring(0, 120) : userAgent;
     }
 
-    /** a***@domain.tld - enough for the user to recognise the destination, useless for enumeration. */
     private static String maskEmail(String email) {
         if (email == null || !email.contains("@")) return "***";
         int at = email.indexOf('@');

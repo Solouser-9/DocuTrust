@@ -60,7 +60,7 @@ export class LoginPresenter extends BasePresenter {
   }
 
   async submit() {
-    if (this.state.status === 'loading') return; // Guard against double-submit
+    if (this.state.status === 'loading') return;
     const errors = validateLogin(this.form);
     if (hasErrors(errors)) {
       this.setState({ fieldErrors: errors });
@@ -75,9 +75,7 @@ export class LoginPresenter extends BasePresenter {
       });
       this.setSuccess(res.user);
       await AuthStore.setSession(userFromApi(res.user), res.accessToken, res.refreshToken);
-      // Root gate switches to the main stack once the session lands.
     } catch (e) {
-      // 1. Handle MFA_REQUIRED
       if (e.code === 'MFA_REQUIRED') {
         this.setSuccess(null);
         this.go('Mfa', {
@@ -87,9 +85,8 @@ export class LoginPresenter extends BasePresenter {
         return;
       }
 
-      // 2. Handle Email Not Verified
       if (e.code === 'EMAIL_NOT_VERIFIED' || (e.message && e.message.toLowerCase().includes('verify your email'))) {
-        this.setSuccess(null); // Clear loading state
+        this.setSuccess(null);
         ToastStore.info('Please verify your email. We sent you a new code.');
         this.go('VerifyOtp', {
           email: this.form.email.trim().toLowerCase(),
@@ -97,7 +94,6 @@ export class LoginPresenter extends BasePresenter {
         return;
       }
 
-      // 3. Standard Error Handling
       const message = this.handleError(e);
       this.setError(message);
       const fieldErrors = e.field ? { [e.field]: message } : {};
@@ -123,7 +119,7 @@ export class RegisterPresenter extends BasePresenter {
   }
 
   async submit() {
-    if (this.state.status === 'loading') return; // Guard against double-submit
+    if (this.state.status === 'loading') return;
     const errors = validateRegister(this.form);
     if (hasErrors(errors)) {
       this.setState({ status: 'idle', error: null, fieldErrors: errors });
@@ -168,7 +164,7 @@ export class VerifyOtpPresenter extends BasePresenter {
   }
 
   async submit() {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     if (this.code.length !== 6) {
       this.setState({ fieldErrors: { code: 'Enter all six digits.' } });
       return;
@@ -184,6 +180,18 @@ export class VerifyOtpPresenter extends BasePresenter {
       this.setState({ fieldErrors: { code: message } });
     }
   }
+
+  async resend() {
+    if (this.state.status === 'loading') return;
+    this.setLoading();
+    try {
+      await authApi.resendOtp(this.email.trim().toLowerCase());
+      ToastStore.info('A new code has been sent to your email.');
+      this.setState({ status: 'idle', error: null, fieldErrors: {} });
+    } catch (e) {
+      this.setError(this.handleError(e));
+    }
+  }
 }
 
 export class VerifyEmailPresenter extends BasePresenter {
@@ -192,7 +200,7 @@ export class VerifyEmailPresenter extends BasePresenter {
       this.setState({ status: 'idle' });
       return;
     }
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     this.setLoading();
     try {
       await authApi.verifyEmail(token);
@@ -206,7 +214,7 @@ export class VerifyEmailPresenter extends BasePresenter {
 
 export class ForgotPasswordPresenter extends BasePresenter {
   async submit(email) {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     if (!email || !email.includes('@')) {
       this.setState({ fieldErrors: { email: 'Enter a valid email address.' } });
       return;
@@ -214,7 +222,6 @@ export class ForgotPasswordPresenter extends BasePresenter {
     this.setLoading();
     try {
       await authApi.forgotPassword(email.trim().toLowerCase());
-      // The endpoint never reveals whether the account exists.
       this.setSuccess({ sent: true, email });
     } catch (e) {
       this.setError(this.handleError(e));
@@ -233,7 +240,6 @@ export class ResetPasswordPresenter extends BasePresenter {
     this.setState({ fieldErrors: { ...this.state.fieldErrors, [key]: null } });
   }
 
-  /** Prefill from the forgot-password screen (route params). */
   configure(email) {
     if (email) {
       this.form.email = email;
@@ -242,7 +248,7 @@ export class ResetPasswordPresenter extends BasePresenter {
   }
 
   async submit() {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     const errors = validateReset(this.form);
     if (!this.form.email || !this.form.email.includes('@')) errors.email = 'Enter the email the code was sent to.';
     if (this.form.confirmPassword !== this.form.newPassword) errors.confirmPassword = 'Passwords do not match.';
@@ -260,18 +266,27 @@ export class ResetPasswordPresenter extends BasePresenter {
       this.setState({ fieldErrors: e.field ? { [e.field]: message } : {} });
     }
   }
+
+  async resend() {
+    if (this.state.status === 'loading') return;
+    this.setLoading();
+    try {
+      await authApi.resendOtp(this.form.email.trim().toLowerCase());
+      ToastStore.info('A new reset code has been sent to your email.');
+      this.setState({ status: 'idle', error: null, fieldErrors: {} });
+    } catch (e) {
+      this.setError(this.handleError(e));
+    }
+  }
 }
 
-// Pure login-challenge presenter: receives the pending credentials from
-// LoginPresenter after a 440 MFA_REQUIRED and finishes the handshake - either with the
-// authenticator (TOTP) or, as the fallback, with a 6-digit code emailed to the account.
 export class MfaPresenter extends BasePresenter {
   constructor(nav) {
     super(nav);
     this.email = '';
     this.password = '';
     this.code = '';
-    this.challenge = null; // set once the email-MFA challenge has been issued
+    this.challenge = null;
   }
 
   configure(email, password) {
@@ -288,13 +303,11 @@ export class MfaPresenter extends BasePresenter {
     return this.challenge ? 'email' : 'totp';
   }
 
-  /** "Email me a code instead": password was already accepted, so this re-runs login with useEmailMfa. */
   async sendEmailCode() {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     this.setLoading();
     try {
       const { data: res } = await authApi.login({ email: this.email, password: this.password, useEmailMfa: true });
-      // Only reachable if MFA was disabled in the meantime - a plain 200 means we are in.
       this.setSuccess(res.user);
       await AuthStore.setSession(userFromApi(res.user), res.accessToken, res.refreshToken);
     } catch (e) {
@@ -310,7 +323,7 @@ export class MfaPresenter extends BasePresenter {
   }
 
   async submit() {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     if (this.code.length !== 6) {
       this.setState({ fieldErrors: { code: 'Enter all six digits.' } });
       return;
@@ -318,7 +331,6 @@ export class MfaPresenter extends BasePresenter {
     this.setLoading();
     try {
       if (this.challenge) {
-        // Email-MFA path: exchange challenge + emailed OTP for the real session tokens.
         const { data: res } = await authApi.verifyOtp({ challenge: this.challenge, code: this.code });
         this.setSuccess(res.user);
         await AuthStore.setSession(userFromApi(res.user), res.accessToken, res.refreshToken);
@@ -339,7 +351,7 @@ export class ChangePasswordPresenter extends BasePresenter {
   constructor(nav) {
     super(nav);
     this.form = { currentPassword: '', newPassword: '', confirmPassword: '' };
-    this.stepUpToken = null; // short-lived second-factor token from verify-step-up
+    this.stepUpToken = null;
   }
 
   setField(key, value) {
@@ -359,7 +371,7 @@ export class ChangePasswordPresenter extends BasePresenter {
   }
 
   async submit() {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     const errors = this.validateForm();
     if (hasErrors(errors)) {
       this.setState({ fieldErrors: errors });
@@ -373,7 +385,6 @@ export class ChangePasswordPresenter extends BasePresenter {
       this.goBack();
     } catch (e) {
       if (e.code === 'STEP_UP_REQUIRED') {
-        // Sensitive action: the server demands a fresh emailed code before it will touch the password.
         try {
           await authApi.requestStepUp();
           this.stepUpToken = null;
@@ -390,9 +401,8 @@ export class ChangePasswordPresenter extends BasePresenter {
     }
   }
 
-  /** Second phase: the user typed the emailed code -> trade it for a step-up token and retry. */
   async confirmStepUp(code) {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     const errors = this.validateForm();
     if (hasErrors(errors)) {
       this.setState({ fieldErrors: errors });
@@ -427,7 +437,7 @@ export class SecurityMfaPresenter extends BasePresenter {
   }
 
   async startSetup() {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     this.setLoading();
     try {
       const res = await authApi.mfaSetup();
@@ -441,7 +451,7 @@ export class SecurityMfaPresenter extends BasePresenter {
   }
 
   async confirm(code) {
-    if (!this.secret || this.state.status === 'loading') return; // Guard
+    if (!this.secret || this.state.status === 'loading') return;
     this.setLoading();
     try {
       await authApi.mfaEnable(this.secret, code);
@@ -457,7 +467,7 @@ export class SecurityMfaPresenter extends BasePresenter {
   }
 
   async disable(code) {
-    if (this.state.status === 'loading') return; // Guard
+    if (this.state.status === 'loading') return;
     this.setLoading();
     try {
       await authApi.mfaDisable(code);

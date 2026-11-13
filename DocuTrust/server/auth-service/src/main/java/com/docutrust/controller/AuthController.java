@@ -10,9 +10,6 @@ import com.docutrust.service.MailService;
 import com.docutrust.service.StepUpService;
 import com.docutrust.util.Json;
 
-// Thin auth endpoints: parse -> service -> respond. OTP flows surface their code via the
-// X-Dev-OTP response header in MAIL_MODE=dev so demos stay verifiable without email traffic -
-// in live mode nothing but the actual email ever carries the code.
 public final class AuthController {
     private final AuthService auth;
     private final StepUpService stepUps;
@@ -38,7 +35,6 @@ public final class AuthController {
         return ctx -> {
             AuthService.LoginResult r = auth.login(ctx.json(), ctx.ip(), ctx.userAgent());
             if (r.mfaChallenge() != null) {
-                // Email MFA challenge (Phase 4): 440 with the challenge token the client echoes to /api/auth/verify-otp.
                 if (r.devOtp() != null) ctx.raw(440, "application/json; charset=utf-8",
                         Json.write(Json.obj("ok", false,
                                 "error", Json.obj("code", "MFA_EMAIL_CHALLENGE",
@@ -63,6 +59,15 @@ public final class AuthController {
                 ctx.ok(auth.verifyRegistrationOtp(Ctx.str(body, "email"), Ctx.str(body, "otp"), ctx.ip(), ctx.userAgent()));
             else
                 ctx.ok(auth.verifyOtp(Ctx.str(body, "challenge"), Ctx.str(body, "code"), ctx.ip(), ctx.userAgent()));
+        };
+    }
+
+    public Handler resendOtp() {
+        return ctx -> {
+            Map<String, Object> body = ctx.json();
+            String email = Ctx.str(body, "email");
+            auth.resendOtp(email);
+            ctx.ok(Json.obj("sent", true));
         };
     }
 
