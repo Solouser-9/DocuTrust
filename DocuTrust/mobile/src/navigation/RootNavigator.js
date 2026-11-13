@@ -27,11 +27,7 @@ const navTheme = {
 
 const linking = {
     prefixes: ['docutrust://'],
-    config: {
-        screens: {
-            PublicVerify: 'verify/:token',
-        },
-    },
+    config: { screens: { PublicVerify: 'verify/:token' } },
 };
 
 const screenOptions = { headerShown: false, contentStyle: { backgroundColor: palette.parchment } };
@@ -78,8 +74,6 @@ function VaultStack() {
             <Stack.Screen name="Folders" component={SCREEN_REGISTRY.Folders.component} />
             <Stack.Screen name="Expiring" component={SCREEN_REGISTRY.Expiring.component} />
             <Stack.Screen name="Trash" component={SCREEN_REGISTRY.Trash.component} />
-
-            {/* Moved these here so they open inside the Vault tab */}
             <Stack.Screen name="DocumentDetail" component={SCREEN_REGISTRY.DocumentDetail.component} />
             <Stack.Screen name="FolderDetail" component={SCREEN_REGISTRY.FolderDetail.component} />
             <Stack.Screen name="UploadDocument" component={SCREEN_REGISTRY.UploadDocument.component} options={{ presentation: 'modal' }} />
@@ -89,6 +83,10 @@ function VaultStack() {
             <Stack.Screen name="Search" component={SCREEN_REGISTRY.Search.component} options={{ presentation: 'modal' }} />
             <Stack.Screen name="CreateVerification" component={SCREEN_REGISTRY.CreateVerification.component} options={{ presentation: 'modal' }} />
             <Stack.Screen name="VerificationDetail" component={SCREEN_REGISTRY.VerificationDetail.component} />
+
+            {/* FIXED: Added CreateShare and ShareDetail here so the Share button works from Document Detail */}
+            <Stack.Screen name="CreateShare" component={SCREEN_REGISTRY.CreateShare.component} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="ShareDetail" component={SCREEN_REGISTRY.ShareDetail.component} />
         </Stack.Navigator>
     );
 }
@@ -126,7 +124,6 @@ function ProfileStack() {
 
 function MainTabs() {
     const insets = useSafeAreaInsets();
-
     return (
         <Tabs.Navigator
             initialRouteName="Vault"
@@ -134,9 +131,7 @@ function MainTabs() {
                 headerShown: false,
                 tabBarActiveTintColor: palette.ink,
                 tabBarInactiveTintColor: palette.slate,
-                tabBarButton: (props) => (
-                    <TouchableOpacity {...props} activeOpacity={1} style={props.style} />
-                ),
+                tabBarButton: (props) => <TouchableOpacity {...props} activeOpacity={1} style={props.style} />,
                 tabBarStyle: {
                     backgroundColor: palette.paper,
                     borderTopColor: palette.line,
@@ -150,50 +145,10 @@ function MainTabs() {
                 tabBarLabelStyle: { fontSize: 10.5, fontWeight: '600', letterSpacing: 0.3, marginTop: 4 },
             }}
         >
-            <Tabs.Screen
-                name="Vault"
-                component={VaultStack}
-                options={{
-                    tabBarIcon: ({ focused }) => (
-                        <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}>
-                            <TabGlyph variant="vault" focused={focused} />
-                        </View>
-                    )
-                }}
-            />
-            <Tabs.Screen
-                name="Shares"
-                component={SharesStack}
-                options={{
-                    tabBarIcon: ({ focused }) => (
-                        <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}>
-                            <TabGlyph variant="shares" focused={focused} />
-                        </View>
-                    )
-                }}
-            />
-            <Tabs.Screen
-                name="Alerts"
-                component={AlertsStack}
-                options={{
-                    tabBarIcon: ({ focused }) => (
-                        <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}>
-                            <TabGlyph variant="alerts" focused={focused} />
-                        </View>
-                    )
-                }}
-            />
-            <Tabs.Screen
-                name="Profile"
-                component={ProfileStack}
-                options={{
-                    tabBarIcon: ({ focused }) => (
-                        <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}>
-                            <TabGlyph variant="profile" focused={focused} />
-                        </View>
-                    )
-                }}
-            />
+            <Tabs.Screen name="Vault" component={VaultStack} options={{ tabBarIcon: ({ focused }) => <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}><TabGlyph variant="vault" focused={focused} /></View> }} />
+            <Tabs.Screen name="Shares" component={SharesStack} options={{ tabBarIcon: ({ focused }) => <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}><TabGlyph variant="shares" focused={focused} /></View> }} />
+            <Tabs.Screen name="Alerts" component={AlertsStack} options={{ tabBarIcon: ({ focused }) => <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}><TabGlyph variant="alerts" focused={focused} /></View> }} />
+            <Tabs.Screen name="Profile" component={ProfileStack} options={{ tabBarIcon: ({ focused }) => <View style={[styles.tabIconContainer, focused && styles.tabIconFocused]}><TabGlyph variant="profile" focused={focused} /></View> }} />
         </Tabs.Navigator>
     );
 }
@@ -279,14 +234,6 @@ const styles = StyleSheet.create({
     glyphBellClapper: { width: 3, height: 3, borderRadius: 2, marginTop: 2 },
     glyphHead: { width: 15, height: 13, borderWidth: 2, borderRadius: 7, marginBottom: 2 },
     glyphShoulders: { width: 18, height: 6, borderWidth: 2, borderRadius: 6 },
-    tabIconContainer: {
-        width: 64,
-        height: 32,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    tabIconFocused: {
-        backgroundColor: palette.cream,
-    },
+    tabIconContainer: { width: 64, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    tabIconFocused: { backgroundColor: palette.cream },
 });

@@ -50,8 +50,8 @@ export default function VersionsScreen({ navigation, route }) {
                     </Text>
                     {!isCurrent ? (
                         <AppButton
-                            label="Save copy" // FIXED: Added label
-                            variant="ghost"
+                            label="Download this version"
+                            variant="amber"
                             small
                             loading={state.workingId === v.id}
                             onPress={() => presenter.downloadVersion(v)}
@@ -93,9 +93,11 @@ const styles = StyleSheet.create({
   error: { color: palette.coralText, fontSize: 12.5, marginTop: spacing(2) },
   versionCard: {
     marginBottom: spacing(2.5),
-    padding: spacing(2),
+    padding: spacing(3),
     borderRadius: 8,
-    backgroundColor: palette.ink,
+    backgroundColor: palette.paper,
+    borderWidth: 1,
+    borderColor: palette.line,
   },
   saveCopyButton: {
     alignSelf: 'flex-start',
@@ -103,9 +105,11 @@ const styles = StyleSheet.create({
   },
   newVersionCard: {
     marginTop: spacing(2),
-    padding: spacing(2),
+    padding: spacing(3),
     borderRadius: 8,
-    backgroundColor: palette.ink,
+    backgroundColor: palette.paper,
+    borderWidth: 1,
+    borderColor: palette.line,
   },
   uploadButton: {
     alignSelf: 'flex-start',

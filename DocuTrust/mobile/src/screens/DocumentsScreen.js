@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { palette } from '../core/theme/palette';
 import { spacing } from '../core/theme/spacing';
-import { type } from '../core/theme/typography';
 import { usePresenter } from '../mvp/usePresenter';
 import { DocumentsListPresenter } from '../microservices/documents/presenters';
 import { STATUS_FILTERS, DOC_TYPES } from '../microservices/documents/model';
@@ -17,7 +16,11 @@ export default function DocumentsScreen({ navigation }) {
   const [state, presenter] = usePresenter(() => new DocumentsListPresenter(navigation));
   const { refreshing, onRefresh } = usePullRefresh(() => presenter.refresh());
   const [filters, setFilters] = useState(presenter.filters);
-  const data = state.data || { items: [], total: 0, hasMore: false, folders: [] };
+
+  // FIXED: Safely handle missing data
+  const data = state.data || {};
+  const items = data.items || [];
+  const folders = data.folders || [];
 
   useEffect(() => {
     presenter.load();
@@ -30,7 +33,6 @@ export default function DocumentsScreen({ navigation }) {
     presenter.setFilter(key, value);
   };
 
-  const folders = data.folders || [];
   const folderName = (id) => {
     const f = folders.find((x) => String(x.id) === String(id));
     return f ? f.name : 'Folder';
@@ -39,8 +41,8 @@ export default function DocumentsScreen({ navigation }) {
   return (
       <Screen
           title="The Vault"
-          eyebrow={`${data.total} document${data.total === 1 ? '' : 's'} under seal`}
-          loading={state.status === 'loading' && !data.items.length}
+          eyebrow={`${data.total || 0} document${data.total === 1 ? '' : 's'} under seal`}
+          loading={state.status === 'loading' && !items.length}
           refreshing={refreshing}
           onRefresh={onRefresh}
       >
@@ -83,7 +85,8 @@ export default function DocumentsScreen({ navigation }) {
                 onAction={() => navigation.navigate('UploadDocument')}
             />
         ) : (
-            data.items.map((doc) => (
+            // FIXED: Safely map over items
+            items.map((doc) => (
                 <FileTabCard
                     key={String(doc.id)}
                     doc={doc}
@@ -94,10 +97,9 @@ export default function DocumentsScreen({ navigation }) {
         )}
 
         {data.hasMore ? (
-            <AppButton label={`Load more (${data.total - data.items.length} left)`} variant="ghost" loading={state.status === 'loading'} onPress={() => presenter.loadMore()} style={{ marginTop: spacing(2) }} />
+            <AppButton label={`Load more (${(data.total || 0) - items.length} left)`} variant="ghost" loading={state.status === 'loading'} onPress={() => presenter.loadMore()} style={{ marginTop: spacing(2) }} />
         ) : null}
 
-        {/* FLOATING UPLOAD BUTTON (FAB) */}
         <TouchableOpacity
             style={styles.fab}
             onPress={() => navigation.navigate('UploadDocument')}
