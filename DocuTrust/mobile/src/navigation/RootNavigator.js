@@ -78,6 +78,17 @@ function VaultStack() {
             <Stack.Screen name="Folders" component={SCREEN_REGISTRY.Folders.component} />
             <Stack.Screen name="Expiring" component={SCREEN_REGISTRY.Expiring.component} />
             <Stack.Screen name="Trash" component={SCREEN_REGISTRY.Trash.component} />
+
+            {/* Moved these here so they open inside the Vault tab */}
+            <Stack.Screen name="DocumentDetail" component={SCREEN_REGISTRY.DocumentDetail.component} />
+            <Stack.Screen name="FolderDetail" component={SCREEN_REGISTRY.FolderDetail.component} />
+            <Stack.Screen name="UploadDocument" component={SCREEN_REGISTRY.UploadDocument.component} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="EditDocument" component={SCREEN_REGISTRY.EditDocument.component} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="Versions" component={SCREEN_REGISTRY.Versions.component} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="History" component={SCREEN_REGISTRY.History.component} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="Search" component={SCREEN_REGISTRY.Search.component} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="CreateVerification" component={SCREEN_REGISTRY.CreateVerification.component} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="VerificationDetail" component={SCREEN_REGISTRY.VerificationDetail.component} />
         </Stack.Navigator>
     );
 }
@@ -86,7 +97,7 @@ function SharesStack() {
     return (
         <Stack.Navigator initialRouteName="SharesMain" screenOptions={screenOptions}>
             <Stack.Screen name="SharesMain" component={SCREEN_REGISTRY.Shares.component} />
-            <Stack.Screen name="CreateShare" component={SCREEN_REGISTRY.CreateShare.component} />
+            <Stack.Screen name="CreateShare" component={SCREEN_REGISTRY.CreateShare.component} options={{ presentation: 'modal' }} />
             <Stack.Screen name="ShareDetail" component={SCREEN_REGISTRY.ShareDetail.component} />
         </Stack.Navigator>
     );
@@ -96,7 +107,7 @@ function AlertsStack() {
     return (
         <Stack.Navigator initialRouteName="Notifications" screenOptions={screenOptions}>
             <Stack.Screen name="Notifications" component={SCREEN_REGISTRY.Notifications.component} />
-            <Stack.Screen name="NotificationPrefs" component={SCREEN_REGISTRY.NotificationPrefs.component} />
+            <Stack.Screen name="NotificationPrefs" component={SCREEN_REGISTRY.NotificationPrefs.component} options={{ presentation: 'modal' }} />
         </Stack.Navigator>
     );
 }
@@ -123,7 +134,6 @@ function MainTabs() {
                 headerShown: false,
                 tabBarActiveTintColor: palette.ink,
                 tabBarInactiveTintColor: palette.slate,
-                // This removes the shadow/ripple animation on tap
                 tabBarButton: (props) => (
                     <TouchableOpacity {...props} activeOpacity={1} style={props.style} />
                 ),
@@ -227,38 +237,12 @@ function AuthStack() {
     );
 }
 
-const MODAL_SCREENS = [
-    'UploadDocument',
-    'EditDocument',
-    'Versions',
-    'History',
-    'Search',
-    'CreateVerification',
-    'NotificationPrefs',
-];
-
-const PLAIN_SCREENS = [
-    'DocumentDetail',
-    'FolderDetail',
-    'VerificationDetail',
-    'CreateShare',
-    'ShareDetail',
-    'AdminReviewDetail',
-    'VerificationRequests',
-    'PublicVerify',
-    'PublicVerifyResult',
-];
-
 function MainStack({ isAdmin, isManager }) {
     return (
         <Stack.Navigator initialRouteName="Tabs" screenOptions={screenOptions}>
             <Stack.Screen name="Tabs" component={MainTabs} />
-            {MODAL_SCREENS.map((name) => (
-                <Stack.Screen key={`modal-${name}`} name={name} component={SCREEN_REGISTRY[name].component} options={{ presentation: 'modal' }} />
-            ))}
-            {PLAIN_SCREENS.map((name) => (
-                <Stack.Screen key={name} name={name} component={SCREEN_REGISTRY[name].component} />
-            ))}
+            <Stack.Screen name="PublicVerify" component={SCREEN_REGISTRY.PublicVerify.component} />
+            <Stack.Screen name="PublicVerifyResult" component={SCREEN_REGISTRY.PublicVerifyResult.component} />
             {isAdmin ? <Stack.Screen name="AdminStack" component={AdminStack} /> : null}
             {isManager ? <Stack.Screen name="OrgStack" component={OrgStack} /> : null}
         </Stack.Navigator>
@@ -295,8 +279,6 @@ const styles = StyleSheet.create({
     glyphBellClapper: { width: 3, height: 3, borderRadius: 2, marginTop: 2 },
     glyphHead: { width: 15, height: 13, borderWidth: 2, borderRadius: 7, marginBottom: 2 },
     glyphShoulders: { width: 18, height: 6, borderWidth: 2, borderRadius: 6 },
-
-    // Fixed dimensions guarantee all pills are identically sized
     tabIconContainer: {
         width: 64,
         height: 32,

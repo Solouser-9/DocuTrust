@@ -26,62 +26,62 @@ export default function VersionsScreen({ navigation, route }) {
   const currentNumber = versions.length ? presenter.num(versions[0]) : 0;
 
   return (
-    <Screen
-      title="Versions"
-      eyebrow={data.doc ? data.doc.title : ''}
-      onBack={() => navigation.goBack()}
-      loading={state.status === 'loading' && !versions.length}
-    >
-      {state.status === 'empty' ? (
-        <EmptyState variant="vault" title="No versions yet" message="The first sealed file becomes version 1." />
-      ) : (
-        versions.map((v) => {
-          const n = presenter.num(v);
-          const isCurrent = n === currentNumber;
-          return (
-            <AppCard key={String(v.id)} style={styles.versionCard}>
-              <View style={styles.rowTop}>
-                <Text style={styles.version}>v{n}</Text>
-                {isCurrent ? <StampBadge status="active" label="Current" /> : <StampBadge status="archived" label="Superseded" />}
-              </View>
-              <Text style={styles.hash}>{shortHash(v.sha256)}</Text>
-              <Text style={type.caption}>
-                {formatBytes(v.fileSize)} · {formatDateTime(v.createdAt)}
-              </Text>
-              {!isCurrent ? (
-                <AppButton
-                  label="Save copy"
-                  variant="ghost"
-                  small
-                  loading={state.workingId === v.id}
-                  onPress={() => presenter.downloadVersion(v)}
-                  style={styles.saveCopyButton}
-                />
-              ) : null}
-            </AppCard>
-          );
-        })
-      )}
+      <Screen
+          title="Versions"
+          eyebrow={data.doc ? data.doc.title : ''}
+          onBack={() => navigation.goBack()}
+          loading={state.status === 'loading' && !versions.length}
+      >
+        {state.status === 'empty' ? (
+            <EmptyState variant="vault" title="No versions yet" message="The first sealed file becomes version 1." />
+        ) : (
+            versions.map((v) => {
+              const n = presenter.num(v);
+              const isCurrent = n === currentNumber;
+              return (
+                  <AppCard key={String(v.id)} style={styles.versionCard}>
+                    <View style={styles.rowTop}>
+                      <Text style={styles.version}>v{n}</Text>
+                      {isCurrent ? <StampBadge status="active" label="Current" /> : <StampBadge status="archived" label="Superseded" />}
+                    </View>
+                    <Text style={styles.hash}>{shortHash(v.sha256)}</Text>
+                    <Text style={type.caption}>
+                      {formatBytes(v.fileSize)} · {formatDateTime(v.createdAt)}
+                    </Text>
+                    {!isCurrent ? (
+                        <AppButton
+                            label="Save copy" // FIXED: Added label
+                            variant="ghost"
+                            small
+                            loading={state.workingId === v.id}
+                            onPress={() => presenter.downloadVersion(v)}
+                            style={styles.saveCopyButton}
+                        />
+                    ) : null}
+                  </AppCard>
+              );
+            })
+        )}
 
-      <AppCard style={styles.newVersionCard}>
-        <Text style={styles.eyebrow}>New version</Text>
-        <Text style={type.caption}>Replaces the fingerprint. The old version is kept forever in this list.</Text>
-        <AppButton
-          label="Upload new version"
-          variant="amber"
-          loading={state.status === 'loading' && versions.length > 0}
-          onPress={async () => {
-            const result = await DocumentPicker.getDocumentAsync({
-              copyToCacheDirectory: true,
-              type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-            });
-            presenter.uploadVersion(result);
-          }}
-          style={styles.uploadButton}
-        />
-        {state.status === 'error' ? <Text style={styles.error}>{state.error}</Text> : null}
-      </AppCard>
-    </Screen>
+        <AppCard style={styles.newVersionCard}>
+          <Text style={styles.eyebrow}>New version</Text>
+          <Text style={type.caption}>Replaces the fingerprint. The old version is kept forever in this list.</Text>
+          <AppButton
+              label="Upload new version"
+              variant="amber"
+              loading={state.status === 'loading' && versions.length > 0}
+              onPress={async () => {
+                const result = await DocumentPicker.getDocumentAsync({
+                  copyToCacheDirectory: true,
+                  type: ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+                });
+                presenter.uploadVersion(result);
+              }}
+              style={styles.uploadButton}
+          />
+          {state.status === 'error' ? <Text style={styles.error}>{state.error}</Text> : null}
+        </AppCard>
+      </Screen>
   );
 }
 
