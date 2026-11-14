@@ -155,7 +155,7 @@ That starts all three buildings: `gateway` on **localhost:8080** (the only addre
 
 | Flow | Mechanism | Proof |
 |---|---|---|
-| Password reset by email | `email_otps` (SHA-256 + purpose salt, 10 min, 5 attempts) + Brevo | `OtpService` + `MailService` (auth-service) · live demo |
+| Password reset by email | `email_otps` (SHA-256 + purpose salt, 10 min, 5 attempts) + Notix | `OtpService` + `MailService` (auth-service) · live demo |
 | Email MFA fallback | login → `440 MFA_EMAIL_CHALLENGE` + challenge JWT → `/api/auth/verify-otp` | auth-service · live demo |
 | Step-up for destructive actions | `request-step-up`/`verify-step-up` → 5-min `X-Step-Up-Token` JWT → gated `change-password` + permanent delete | auth-service · live demo (403 → emailed code) |
 | OTP-gated share links | `require_otp` + pinned recipient → `401 SHARE_OTP_REQUIRED` → `request-otp` / `open-with-otp` | core-service share guards · live demo |
