@@ -9,20 +9,19 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 
-// Email delivery via the Brevo transactional API. MAIL_MODE=live posts to api.brevo.com;
+// Email delivery via the Notix transactional API. MAIL_MODE=live posts to usenotix.dev;
 // MAIL_MODE=dev (the default) never touches the network - the code is logged and surfaced
 // to the caller via the X-Dev-OTP response header so demos stay verifiable without email traffic.
 public final class MailService {
-    private static final String BREVO_URL = "https://api.brevo.com/v3/smtp/email";
+    private static final String NOTIX_URL = "https://app.usenotix.dev/api/v1/emails";
 
-    private final String mode, apiKey, senderEmail, senderName;
+    private final String mode, apiKey, senderEmail;
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
 
     public MailService(Config cfg) {
         this.mode = cfg.mailMode;
-        this.apiKey = cfg.brevoApiKey;
-        this.senderEmail = cfg.brevoSenderEmail;
-        this.senderName = cfg.brevoSenderName;
+        this.apiKey = cfg.notixApiKey;
+        this.senderEmail = cfg.notixSenderEmail;
     }
 
     public boolean devMode() { return !"live".equalsIgnoreCase(mode); }
@@ -34,21 +33,28 @@ public final class MailService {
             return;
         }
         try {
+            // Build Notix-compatible JSON payload
             String payload = com.docutrust.util.Json.write(com.docutrust.util.Json.obj(
-                    "sender", com.docutrust.util.Json.obj("name", senderName, "email", senderEmail),
-                    "to", new Object[]{com.docutrust.util.Json.obj("email", toEmail)},
+                    "from", "DocuTrust <" + senderEmail + ">",
+                    "to", toEmail,
                     "subject", subject,
-                    "textContent", textBody));
-            HttpRequest req = HttpRequest.newBuilder(URI.create(BREVO_URL))
+                    "html", textBody.replace("\n", "<br>")));
+
+            HttpRequest req = HttpRequest.newBuilder(URI.create(NOTIX_URL))
                     .timeout(Duration.ofSeconds(15))
-                    .header("api-key", apiKey)
-                    .header("content-type", "application/json")
-                    .header("accept", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(payload))
                     .build();
+
             HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
-            if (res.statusCode() < 200 || res.statusCode() >= 300)
+
+            if (res.statusCode() < 200 || res.statusCode() >= 300) {
+                System.err.println("[mail] Notix API error: " + res.statusCode() + " - " + res.body());
                 throw new AppException(502, "MAIL_SEND_FAILED", "Email provider rejected the message (HTTP " + res.statusCode() + ")");
+            }
+            System.out.println("[mail] Email sent via Notix to " + toEmail);
+
         } catch (AppException e) {
             throw e;
         } catch (InterruptedException e) {

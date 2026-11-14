@@ -15,8 +15,8 @@ public final class Config {
     public final boolean seedDemo;
     public final int dbPoolMax;
     public final boolean migratorEnabled;
-    // OTP mail delivery (Brevo) + optional Sentry Spotlight profiling.
-    public final String mailMode, brevoApiKey, brevoSenderEmail, brevoSenderName;
+    // OTP mail delivery (Notix) + optional Sentry Spotlight profiling.
+    public final String mailMode, notixApiKey, notixSenderEmail;
     public final boolean spotlightEnabled;
 
     // E-3: HS256 needs >=256 bits of key material; the .env.example placeholder must never reach runtime.
@@ -69,14 +69,14 @@ public final class Config {
         // unconditional, idempotent Migrator.apply on boot.
         dbPoolMax = Integer.parseInt(getOrDefault("DB_POOL_MAX", "10"));
         migratorEnabled = !"false".equalsIgnoreCase(getOrDefault("MIGRATOR_ENABLED", "true"));
+
         mailMode = getOrDefault("MAIL_MODE", "dev");
-        brevoApiKey = get("BREVO_API_KEY");
-        brevoSenderEmail = get("BREVO_SENDER_EMAIL");
-        brevoSenderName = getOrDefault("BREVO_SENDER_NAME", "DocuTrust");
+        notixApiKey = get("NOTIX_API_KEY");
+        notixSenderEmail = getOrDefault("NOTIX_SENDER_EMAIL", "noreply@docutrust.us.ci");
+
         // Fail fast: live mode with no credentials would strand every OTP request at send time.
-        if ("live".equalsIgnoreCase(mailMode) && (brevoApiKey == null || brevoApiKey.isBlank()
-                || brevoSenderEmail == null || brevoSenderEmail.isBlank())) {
-            System.err.println("MAIL_MODE=live requires BREVO_API_KEY and BREVO_SENDER_EMAIL (or set MAIL_MODE=dev for the console/X-Dev-OTP delivery).");
+        if ("live".equalsIgnoreCase(mailMode) && (notixApiKey == null || notixApiKey.isBlank())) {
+            System.err.println("MAIL_MODE=live requires NOTIX_API_KEY (or set MAIL_MODE=dev for the console/X-Dev-OTP delivery).");
             System.exit(1);
         }
         spotlightEnabled = "true".equalsIgnoreCase(get("SPOTLIGHT_ENABLED"));
@@ -144,14 +144,6 @@ public final class Config {
         }
     }
 
-    /**
-     * D-1: accepts ONLY a 44-character base64 string that decodes to exactly 32 bytes.
-     * Runs at config load - BEFORE database connections and migrations - so a bad key fails fast.
-     * KNOWN LIMITATION: vaults previously encrypted under a passphrase-derived key
-     * (SHA-256(passphrase)) will NOT decrypt after the passphrase path was removed -
-     * affected deployments must re-encrypt or start with a fresh VAULT_DIR. Accepted
-     * breakage: student project, no production data.
-     */
     public static void validateVaultKeyFormat(String key) {
         if (key != null && key.length() == 44) {
             try {
