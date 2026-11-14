@@ -3,13 +3,13 @@
 ```mermaid
 flowchart LR
     subgraph CLIENT["📱 Mobile app (React Native / Expo)"]
-        M["45 screens · MVP · ApiClient<br/>knows ONE address: :8080"]
+        M["46 screens · MVP · ApiClient<br/>knows ONE address: :8080"]
     end
 
     G["🛎 GATEWAY :8080<br/>pure-Java reverse proxy<br/>receptionist"]
 
     subgraph AUTH["🚫 AUTH-SERVICE :8081 — the bouncer"]
-        A["18 /api/auth/* routes<br/>login · refresh · MFA · step-up · OTP"]
+        A["19 /api/auth/* routes<br/>login · refresh · MFA · step-up · OTP"]
     end
 
     subgraph CORE["🔐 CORE-SERVICE :9000 — the vault room"]
@@ -40,7 +40,7 @@ Rendered diagram: [`diagrams/architecture.png`](diagrams/architecture.png) · Me
 
 **The backend is a campus with three buildings and one shared pantry.** The **receptionist** (`gateway`, port 8080) is the only door customers use: it checks nothing except *where* your request should go, forwards it **unchanged** (method, address, query string, headers, body — byte for byte), and carries the answer back. If the building it needs is closed, it hands back a polite `502 BAD_GATEWAY` note instead of pretending. The **bouncer** (`auth-service`, 8081) owns proving who you are: passwords, the ID cards called JWTs, the emailed one-time codes. The **vault room** (`core-service`, 9000) owns everything valuable: encrypted documents, share links, verification proofs, admin paperwork. Both working buildings reach into the **same pantry** (one Neon PostgreSQL database, 15 tables) and the **same safe** (one AES-256-GCM vault volume, mounted into both) — and because the bouncer prints ID cards **with the same secret ink** the vault room uses to check them (`JWT_SECRET` shared via `.env`), a card printed at one building is trusted at the other with no phone call. That is cross-service JWT validation, and it is why "log in, then list my documents" works across two JVMs.
 
-**The frontend is still a smartphone** — and deliberately unchanged. `screens/` are the apps you open (45 of them); `components/` are the buttons; `microservices/` are the invisible background processes that fetch your data; `navigation/` is the home-screen gesture; `core/config/env.js` reads `EXPO_PUBLIC_API_URL`, which now points at the **gateway** (`:8080`). The phone cannot tell there are two buildings behind the desk — that is the Strangler Fig paying off. The full beginner walkthroughs live in [`DEFENCE_GUIDE.md`](../DEFENCE_GUIDE.md) Part 2.
+**The frontend is still a smartphone** — and deliberately unchanged. `screens/` are the apps you open (46 of them); `components/` are the buttons; `microservices/` are the invisible background processes that fetch your data; `navigation/` is the home-screen gesture; `core/config/env.js` reads `EXPO_PUBLIC_API_URL`, which now points at the **gateway** (`:8080`). The phone cannot tell there are two buildings behind the desk — that is the Strangler Fig paying off. The full beginner walkthroughs live in [`DEFENCE_GUIDE.md`](../DEFENCE_GUIDE.md) Part 2.
 
 ## The gateway routing rules (all of them)
 
@@ -56,7 +56,7 @@ Rendered diagram: [`diagrams/architecture.png`](diagrams/architecture.png) · Me
 
 ```
 Mobile (React Native 0.88 / Expo SDK 58, JavaScript)
-  9 frontend microservices · 45 screens · MVP (View → Presenter → Model)
+  9 frontend microservices · 46 screens · MVP (View → Presenter → Model)
         │ HTTPS · JSON envelopes · Bearer JWT · multipart   ← one address: the gateway :8080
         ▼
 Gateway (pure Java 21 reverse proxy, port 8080)
@@ -67,7 +67,7 @@ Gateway (pure Java 21 reverse proxy, port 8080)
         ▼
 ┌──────────────────────────┐        ┌──────────────────────────────────┐
 │ auth-service :8081       │        │ core-service :9000               │
-│ Router (19 routes) ·     │        │ Router (56 routes, RC-1) ·       │
+│ Router (20 routes) ·     │        │ Router (56 routes, RC-1) ·       │
 │ Middleware (CORS, log,   │        │ Middleware (same chain, same     │
 │ JWT verify, roles, rate  │        │ secret) · 10 controllers ·       │
 │ limit) · Auth/Otp/Mail/  │        │ Document/Share/Verify/Org/...    │
@@ -87,12 +87,12 @@ Gateway (pure Java 21 reverse proxy, port 8080)
 
 ## Request lifecycle (authoritative version)
 
-1. Presenter calls `ApiClient` → request leaves with `Authorization: Bearer <JWT>` loaded from SecureStore, addressed to the **gateway** (`EXPO_PUBLIC_API_URL`).
+1. Presenter calls `ApiClient` → request leaves with `Authorization: Bearer <JWT>` loaded from AsyncStorage (`docutrust.session.v1`), addressed to the **gateway** (`EXPO_PUBLIC_API_URL`).
 2. **Gateway** matches the routing rules (RC-1 exact match first, then the `/api/auth/` prefix, then default), rebuilds the upstream URL with the raw path + raw query, copies the headers (minus hop-by-hop/`host`/`content-length`), forwards the body bytes, and recomputes `X-Forwarded-For`.
 3. **The receiving service** (auth or core) runs the identical middleware chain it has always run: CORS → logging → JWT verify with the **shared `JWT_SECRET`** (401 `UNAUTHORIZED` / `401 TOKEN_EXPIRED`) → role guard (403 + audit row on refusal) → rate limit (429, Bucket4j per scope + IP).
 4. Controller parses → calls service; services own all business rules and run DAO calls inside `Tx` on their own HikariCP pool (each service caps at **≤ 5 connections** — four services × 5 fits Neon's free-tier connection budget).
 5. Success: `{ ok:true, data, meta? }`. Failure: typed `AppException` → global boundary → `{ ok:false, error:{ code, message, field? } }` — the gateway forwards it byte-for-byte.
-6. Sensitive destructive routes still answer `403 STEP_UP_REQUIRED` without a fresh `X-Step-Up-Token`; OTP flows still mint hashed single-use codes and email them through Brevo (`X-Dev-OTP` in dev mode — the header passes straight back through the gateway).
+6. Sensitive destructive routes still answer `403 STEP_UP_REQUIRED` without a fresh `X-Step-Up-Token`; OTP flows still mint hashed single-use codes and email them through Notix (`X-Dev-OTP` in dev mode — the header passes straight back through the gateway).
 7. If the upstream service is down, the gateway answers **502 BAD_GATEWAY** itself with the standard error envelope — the mobile app sees a typed code, not a hang.
 8. Security-relevant branches append to `audit_logs` (append-only by trigger) with the true client IP, thanks to the gateway's `X-Forwarded-For` rewrite.
 
@@ -100,8 +100,8 @@ Gateway (pure Java 21 reverse proxy, port 8080)
 
 | Student | Domain | Server | Mobile | Proof (public) |
 |---|---|---|---|---|
-| 1 | Infrastructure & DB | Router + middleware (per service), JWT service, config, schema V01–V12 | Dashboard, navigation shell | Boot logs: core `routes=56`, auth `routes=19`; gateway banner names both upstreams |
-| 2 | Auth & OTP security | **auth-service** (18 auth routes), PBKDF2, rotation, MFA, OtpService, MailService, StepUpService, TokenService | 8 auth screens | Live login/refresh/OTP demo **through the gateway** |
+| 1 | Infrastructure & DB | Router + middleware (per service), JWT service, config, schema V01–V12 | Dashboard, navigation shell | Boot logs: core `routes=56`, auth `routes=20`; gateway banner names both upstreams |
+| 2 | Auth & OTP security | **auth-service** (19 auth routes), PBKDF2, rotation, MFA, OtpService, MailService, StepUpService, TokenService | 8 auth screens | Live login/refresh/OTP demo **through the gateway** |
 | 3 | Business logic | **core-service**: DocumentService, FileVault, ShareService, VerifyService, invites (+ RC-1 accept-invite) | 12 vault screens | Live vault + tamper demo through the gateway |
 | 4 | Mobile app | — (API client contract) | All 46 screens, MVP infra, ApiClient | Live emulator walkthrough — `EXPO_PUBLIC_API_URL` points at the gateway |
 | 5 | The 8-pass audit | Hardening batches 1–3 (finding IDs B-1, C-1, E-3, D-1, H-1…) + the refactor's own fail-fast discipline | — | Finding IDs greppable in code |

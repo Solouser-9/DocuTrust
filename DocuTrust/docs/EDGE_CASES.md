@@ -14,7 +14,7 @@ Ten hands-on demos for the final presentation. Each is reproducible with the see
 | 6 | **Role escalation attempt** | As `member`, call `GET /api/admin/users` with a valid member JWT | `403 FORBIDDEN` from RoleGuard middleware; audit row `admin_access_denied`; UI admin tab hidden by role, but the server never trusted the UI |
 | 7 | **Ownership bypass attempt** | As user B, call `GET /api/documents/{id-of-user-A}` | `404 NOT_FOUND` (ownership in SQL WHERE, so B cannot even prove A's document exists) |
 | 8 | **Concurrent version upload race** | Fire two version uploads at the same version simultaneously (two terminals) | One succeeds as v(N+1); the loser hits UNIQUE(document_id, version_number) → `409 CONFLICT` clean error, no corrupt state |
-| 9 | **Mime spoofing / oversize file** | Upload a `.exe` renamed to `.pdf` → `415 UNSUPPORTED_MEDIA_TYPE`. Upload 30 MB → `413 FILE_TOO_LARGE`; nothing written to vault |
+| 9 | **Mime spoofing / oversize file** | Upload a `.exe` renamed to `.pdf` → `415 UNSUPPORTED_MEDIA_TYPE` (the server also verifies magic bytes, so a fake extension alone never passes). Upload 30 MB → `413` (the gateway answers `PAYLOAD_TOO_LARGE` before the service sees the body); nothing written to vault |
 | 10 | **Tamper-evident verification** | Create verification link for a document; verify → `valid`. (Demo hook) overwrite 2 bytes in the vault file, verify again | Result flips to `tampered` because recomputed SHA-256 ≠ stored SHA-256; proves version integrity end-to-end |
 
 **Bonus rapid-fire edge cases (Q&A if time allows):**
@@ -24,4 +24,4 @@ Ten hands-on demos for the final presentation. Each is reproducible with the see
 - Folder delete: documents survive with `folder_id = NULL` (FK ON DELETE SET NULL).
 - Duplicate email register → `409 CONFLICT` (UNIQUE constraint, not app logic).
 - History immutability: `UPDATE document_history ...` in SQL editor → DB exception "append-only".
-- Rate limit: 11th login attempt in a minute → `429 RATE_LIMITED`.
+- Rate limit: 21st login attempt in a minute → `429 RATE_LIMITED` (the `auth` scope allows 20/min per IP).

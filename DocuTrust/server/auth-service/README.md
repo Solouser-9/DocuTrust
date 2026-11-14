@@ -1,9 +1,9 @@
 # auth-service (Phase 2, behind the gateway since Phase 3)
 
-The **bouncer's building** — serves the 18 `/api/auth/*` routes extracted from core-service: register, login, forgot-password,
-reset-password-otp, verify-otp, refresh, logout, verify-email, me (GET+PATCH), sessions (GET+DELETE),
+The **bouncer's building** — serves the 19 `/api/auth/*` routes extracted from core-service: register, login, forgot-password,
+reset-password-otp, verify-otp, resend-otp, refresh, logout, verify-email, me (GET+PATCH), sessions (GET+DELETE),
 change-password, request-step-up, verify-step-up, mfa/setup, mfa/enable, mfa/disable — plus its own
-`GET /api/health`: **19 routes on port 8081**. Package names remain `com.docutrust.*`.
+`GET /api/health`: **20 routes on port 8081**. Package names remain `com.docutrust.*`.
 `/api/auth/accept-invite` deliberately stays in core-service (RC-1: the handler is
 `OrgController.acceptInvite`, admin-domain logic under an auth prefix — the gateway routes it there
 by exact match, checked before the `/api/auth/` prefix rule).

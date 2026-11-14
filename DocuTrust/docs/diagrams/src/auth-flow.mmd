@@ -6,7 +6,7 @@ sequenceDiagram
     participant Middleware as Middleware (JWT + rate limit)
     participant Login_Service as Login_Service (AuthService)
     participant OTP_Service as OTP_Service (hashed codes)
-    participant Mail_Service as Mail_Service (Brevo)
+    participant Mail_Service as Mail_Service (Notix)
     participant Database as Database (PostgreSQL)
 
     Mobile_App->>Middleware: POST /api/auth/login {email, password}

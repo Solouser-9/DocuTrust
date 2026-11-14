@@ -11,7 +11,7 @@
 | Building | Port | Analogy | What actually runs there |
 |---|---|---|---|
 | **Gateway** | **8080** | The **receptionist at the front desk** — takes every request and forwards it, untouched, to the right building; if a building is closed, the receptionist says so politely (502 Bad Gateway) | Pure Java 21 reverse proxy (`com.sun.net.httpserver` + `java.net.http.HttpClient`). Routing rules: `POST /api/auth/accept-invite` → Core (RC-1: admin logic that lives under an auth prefix), anything starting `/api/auth/` → **Auth**, everything else → **Core**. It preserves method, path, query, headers and body byte-for-byte — the app cannot tell it is not talking to a single server |
-| **auth-service** | **8081** | The **bouncer at the security desk** — checks passwords, prints ID cards, emails wristbands | 18 `/api/auth/*` routes (register, login, refresh, me, sessions, MFA, step-up, OTP…) + its own `/api/health`. Never touches migrations; verifies the same JWTs with the same secret |
+| **auth-service** | **8081** | The **bouncer at the security desk** — checks passwords, prints ID cards, emails wristbands | 19 `/api/auth/*` routes (register, login, refresh, me, sessions, MFA, step-up, OTP, resend-otp…) + its own `/api/health` = 20. Never touches migrations; verifies the same JWTs with the same secret |
 | **core-service** | **9000** | The **vault room** — where the valuable things live and the paperwork is stamped | 56 routes: documents, folders, shares, verification, notifications, admin, org — plus `/api/auth/accept-invite` (RC-1). Runs the migrations, the demo seeder and the 60-second ExpiryScheduler (exactly one copy per environment) |
 
 **One pantry, two chefs:** auth-service and core-service both connect to the **same** PostgreSQL database (Neon free tier — we picked a shared DB over per-service databases because Render's free plan gives each service only 512 MB of RAM, and two databases would also mean answering "what if a login commits but the document insert doesn't?" — a distributed-transactions headache we deliberately refused). The **JWT_SECRET is shared** between the two services, so a token the bouncer printed is verified by the vault room without a phone call — that is **cross-service JWT validation**, and it is why login on 8081 then reading documents on 9000 just works.
@@ -20,7 +20,7 @@
 
 | Metric | Value |
 |---|---|
-| Logical API routes | **74** = 56 (core-service, incl. RC-1 accept-invite) + 19 (auth-service, incl. its health route) — printed at each service's boot |
+| Logical API routes | **75** = 56 (core-service, incl. RC-1 accept-invite) + 20 (auth-service, incl. its health route) — printed at each service's boot; `POST /api/auth/resend-otp` joined in the OTP-era UI pass |
 | Run services | **3** (gateway + auth + core) — the vault-service and admin-service stubs exist but are not yet wired (Strangler Fig, next slices) |
 | Runnable artifacts | `mvn clean install` → **3 jars**: `docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar` |
 | Database | **15 tables**, migrations V01–V12, **shared** by both DB-touching services (Neon PostgreSQL) |
@@ -89,7 +89,7 @@ DocuTrust/
    cd server
    PORT=8081 mvn -pl auth-service exec:java
    ```
-   Expect: `[auth-service] migrations skipped (auth-service never runs migrations)` then `[auth-service] ready on port 8081 (routes=19, db=up)`.
+   Expect: `[auth-service] migrations skipped (auth-service never runs migrations)` then `[auth-service] ready on port 8081 (routes=20, db=up)`.
 
 5. **Terminal 3 — the receptionist (gateway, 8080).**
    ```bash
@@ -113,7 +113,7 @@ DocuTrust/
    cp .env.example .env          # set EXPO_PUBLIC_API_URL=http://<YOUR-PC-LAN-IP>:8080  (the gateway!)
    npm install && npx expo start  # scan QR with Expo Go, or press i / a
    ```
-   The client stores the session JWT in `expo-secure-store`; the phone and the PC must share the same Wi-Fi.
+   The client stores the whole session (JWT pair + profile) in AsyncStorage under the `docutrust.session.v1` key; the phone and the PC must share the same Wi-Fi.
 
 ## Quick start B — Docker Compose (one command, the whole campus)
 
@@ -124,13 +124,13 @@ cp DocuTrust/server/.env.example .env    # fill in DB_URL, DB_USER, DB_PASSWORD,
 docker compose up --build
 ```
 
-That starts all three buildings: `gateway` on **localhost:8080** (the only address the app needs), `auth-service` on 8081 and `core-service` on 9000 (also published locally for debugging and direct-access demos). The compose file wires `CORE_URL=http://core-service:9000` and `AUTH_URL=http://auth-service:8081` into the gateway, mounts **one shared vault volume** into both auth and core (so MFA secret decryption works across services), gives each DB-touching service a **DB_POOL_MAX of 5** (four-service pool budget fits Neon's free tier), and leaves migrations to **core only**. Stop everything with `Ctrl+C`; wipe volumes with `docker compose down -v`.
+That starts all three buildings: `gateway` on **localhost:8080** (the only address the app needs), `auth-service` on 8081 and `core-service` on 9000 (also published locally for debugging and direct-access demos). The compose file wires `CORE_URL=http://core-service:9000` and `AUTH_URL=http://auth-service:8081` into the gateway, mounts **one shared vault volume** into both auth and core (so MFA secret decryption works across services), gives each DB-touching service a **DB_POOL_MAX of 5** (both services × 5 connections fit Neon's free tier), and leaves migrations to **core only**. Stop everything with `Ctrl+C`; wipe volumes with `docker compose down -v`.
 
 ## Documentation map
 
 | Document | Content |
 |---|---|
-| `docs/API_CONTRACTS.md` | All 74 paths, envelopes, error codes, pagination/search conventions — and which service serves what |
+| `docs/API_CONTRACTS.md` | All 75 paths, envelopes, error codes, pagination/search conventions — and which service serves what |
 | `docs/FEATURES.md` | 216 numbered features across 10 modules + OTP security addendum |
 | `docs/ARCHITECTURE.md` | The three-building topology, gateway routing rules, request lifecycle (Mermaid) |
 | `docs/ER_DIAGRAM.md` | 15-table schema, relationships, constraints — one shared database |

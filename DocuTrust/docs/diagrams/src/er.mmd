@@ -1,4 +1,4 @@
-%% DocuTrust ER diagram (Mermaid source) - 15 tables (V11)
+%% DocuTrust ER diagram (Mermaid source) - 15 tables, migrations V01-V12
 erDiagram
     ORGANISATIONS ||--o{ USERS : "has members"
     USERS ||--o{ REFRESH_TOKENS : "sessions"
@@ -51,7 +51,7 @@ erDiagram
         uuid user_id FK "nullable - share recipients"
         uuid share_id FK "nullable - share-access codes"
         varchar recipient_email "target inbox (lowercase)"
-        varchar purpose "password_reset|mfa_login|step_up|share_access|org_invite"
+        varchar purpose "registration|password_reset|mfa_login|step_up|share_access|org_invite"
         varchar otp_hash "sha256 over purpose, email and code"
         timestamptz expires_at "10 min, invites 24 h"
         timestamptz used_at "single use"

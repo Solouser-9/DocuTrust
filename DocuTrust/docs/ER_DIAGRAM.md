@@ -6,7 +6,7 @@ Rendered diagram: [`diagrams/er.png`](diagrams/er.png) · Mermaid source: [`diag
 
 > **Plain English — how to read this:** the database is the referee. Application code can have bugs, so the rules that must *never* break live here, in the schema: ownership is a column on every row, "sensitive documents need review" is a CHECK constraint, history tables refuse UPDATE/DELETE by trigger, and every one-time code is stored only as a salted hash. Fifteen tables, grouped below, describe one simple story — people in organisations own folders of documents; documents are versioned, shared and verifiable; and two tables exist purely for trust: `audit_logs` (what happened, unchangeable) and `email_otps` (short-lived proof-of-inbox codes).
 
-> **Explain it like I'm 5:** think of the database as a **filing cabinet**. Each **table is a drawer** (`users`, `documents`, `shares`… fifteen of them), each **row is an index card** in that drawer, and every card in a drawer has the same printed **fields (columns)** — no hand-scribbled odd shapes. A **foreign key is a cross-reference on the card**: a document card says "owner: see card #42 in the USERS drawer", and the clerk refuses to file a card whose reference doesn't exist — or to destroy a user card while documents still point at it. The cabinet was built from eleven numbered instruction sheets (`V01…V12`, the **migrations**), so anyone can rebuild the identical cabinet from scratch in order, in minutes. PostgreSQL is the strict, free, 25-year-old clerk who enforces the house rules even against our own bugs.
+> **Explain it like I'm 5:** think of the database as a **filing cabinet**. Each **table is a drawer** (`users`, `documents`, `shares`… fifteen of them), each **row is an index card** in that drawer, and every card in a drawer has the same printed **fields (columns)** — no hand-scribbled odd shapes. A **foreign key is a cross-reference on the card**: a document card says "owner: see card #42 in the USERS drawer", and the clerk refuses to file a card whose reference doesn't exist — or to destroy a user card while documents still point at it. The cabinet was built from twelve numbered instruction sheets (`V01…V12`, the **migrations**), so anyone can rebuild the identical cabinet from scratch in order, in minutes. PostgreSQL is the strict, free, 25-year-old clerk who enforces the house rules even against our own bugs.
 
 ## Tables (15) — one shared database, two services
 
@@ -41,7 +41,7 @@ Rendered diagram: [`diagrams/er.png`](diagrams/er.png) · Mermaid source: [`diag
 | `user_id` | UUID FK, nullable | the account the code protects (NULL for share-access codes) |
 | `share_id` | UUID FK, nullable | binds a share-access code to exactly one share link |
 | `recipient_email` | VARCHAR(255) | the only inbox the code was sent to (lowercased target key) |
-| `purpose` | VARCHAR(32) | `password_reset` · `mfa_login` · `step_up` · `share_access` · `org_invite` |
+| `purpose` | VARCHAR(32) | `registration` · `password_reset` · `mfa_login` · `step_up` · `share_access` · `org_invite` |
 | `otp_hash` | VARCHAR(64) | SHA-256 of `purpose:email:code` — the plaintext code is nowhere in the database |
 | `expires_at` | TIMESTAMPTZ | 10 minutes for personal codes, 24 hours for invites |
 | `used_at` | TIMESTAMPTZ | set once on successful verification (single use, race-safe) |
@@ -50,7 +50,7 @@ Rendered diagram: [`diagrams/er.png`](diagrams/er.png) · Mermaid source: [`diag
 
 **Why the salt matters (defence line):** hashing `purpose:email:code` instead of just `code` means a code captured for, say, password reset cannot be replayed as a step-up or share code even if a digest leaked — the digest simply doesn't match any other purpose's arithmetic.
 
-**`refresh_tokens` now powers the Active Sessions UI:** the backend exposes the device/session ledger from this table (`listSessions` + `revokeById`), and the mobile "Where am I signed in?" screen renders the rows with `device`, `ip`, `user_agent`, `last_seen_at` and the current-device marker. It is not just a rotation store anymore — it is the user-facing session history.
+**`refresh_tokens` now powers the Active Sessions UI:** the backend exposes the device/session ledger from this table (`listSessions` + `revokeById`), and the mobile "Where am I signed in?" screen renders the rows with `device`, `ip`, `createdAt` (sign-in time) and `expiresAt`, newest first, each with its own revoke button. It is not just a rotation store anymore — it is the user-facing session history.
 
 ## `shares` additions (V11)
 
@@ -68,6 +68,7 @@ Rendered diagram: [`diagrams/er.png`](diagrams/er.png) · Mermaid source: [`diag
 - Auto-history trigger on `documents` writes `created`, `version_added`, `status_changed` rows itself.
 - Head-sync trigger: new `document_versions` rows update `documents.sha256 / file_size / mime_type / current_version`.
 - Views: `v_expiring_documents` (expiry radar with `days_left`), `v_admin_stats` (dashboard counters).
+- V12 widens `users.mfa_secret` to `VARCHAR(255)` so TOTP secrets can be stored vault-encrypted (`gcm:v1:…`) instead of as plaintext — auth-service decrypts them with the shared `VAULT_KEY`.
 - Key indexes: partial `documents(owner_id) WHERE deleted_at IS NULL`; GIN trigram on `title`; partial `shares(link_token) WHERE revoked_at IS NULL`; composite `(entity, created_at DESC)` for history/audit/notifications; `(purpose, recipient_email)` / `(user_id, purpose)` / `(share_id, purpose)` on `email_otps`.
 
 ## Lifecycle states

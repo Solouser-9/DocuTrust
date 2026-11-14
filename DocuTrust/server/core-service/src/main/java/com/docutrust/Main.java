@@ -222,7 +222,7 @@ public final class Main {
 
         // ---- boot extras ----
         if (cfg.seedDemo) {
-            System.err.println("[SECURITY WARNING] SEED_DEMO is true -- reset codes are returned in HTTP responses. This is demo-only behavior.");
+            System.err.println("[SECURITY WARNING] SEED_DEMO is true -- demo accounts with well-known credentials (in source control) will be seeded on a localhost database. This is demo-only behavior.");
         }
         Bootstrap.seed(db, vault, passwords, cfg.seedDemo, cfg.dbUrl);
         ExpiryScheduler scheduler = new ExpiryScheduler(db, notifications);

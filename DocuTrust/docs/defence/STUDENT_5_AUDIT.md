@@ -15,7 +15,7 @@ This file is the complete rehearsal brief for **Student 5, who owns the 8-Pass S
 **My numbers:**
 
 - **8 passes, A through H** — access control, crypto and vault, concurrency, configuration, input validation, information leakage, error handling, and data integrity.
-- **74 logical API routes across two services** (core-service 56, auth-service 19) — the audit's ID comments live in both codebases, in the same shared-module files both services compile.
+- **75 logical API routes across two services** (core-service 56, auth-service 20) — the audit's ID comments live in both codebases, in the same shared-module files both services compile.
 - **15 finding IDs verifiable in code comments in this shipped tree** — A-3, B-1, B-2, B-3, C-1, C-2, C-7, C-8, C-13, D-1, E-3, F-2, F-4, H-1, H-3 — out of the ledger that spans A-1 … H-3 (see the honest note under the finding table).
 - **3 hardening batches** shipped after the audit, each leaving the tree in a clean-build, bootable state.
 - **Greppable proof** — every finding ID lives in a code comment in this shipped tree: `grep -rn "B-1" server/src/main/java/com/docutrust/auth/TokenService.java` lands on the fix and its story (the live grep index below).
@@ -118,7 +118,7 @@ The OTP overhaul that the audit produced is written down as sixteen numbered fea
 | ID | What shipped |
 |---|---|
 | FT-217 | Email OTP engine: 6-digit SecureRandom codes, SHA-256 `purpose:email:code` digests at rest, single-use, 10-min TTL (24 h invites), 5-attempt burn, one live code per target |
-| FT-218 | Brevo email delivery (`MailService`): `MAIL_MODE=live` posts to Brevo's transactional API; `MAIL_MODE=dev` logs the code and echoes it in `X-Dev-OTP` (bodies never carry codes) |
+| FT-218 | Notix email delivery (`MailService`): `MAIL_MODE=live` posts to Notix's transactional API; `MAIL_MODE=dev` logs the code and echoes it in `X-Dev-OTP` (bodies never carry codes) |
 | FT-219 | Password reset by emailed OTP: `forgot-password` → `reset-password-otp {email, code, newPassword}`; legacy reset-code-in-response pattern removed |
 | FT-220 | Email MFA fallback for login: `useEmailMfa:true` → `440 MFA_EMAIL_CHALLENGE` + 10-min challenge JWT → `POST /api/auth/verify-otp` issues session tokens |
 | FT-221 | Step-up verification: `request-step-up` / `verify-step-up` → 5-minute single-purpose JWT (`typ=step_up`) |
@@ -324,7 +324,7 @@ Three habits became house rules. Transactions hold exactly one connection, and a
 Two moves. First, `grep -rn "B-1" server/src/main/java/com/docutrust/auth/TokenService.java` — the comment tells the whole story in the authors' own words, which is stronger than any slide. Second, live behaviour: replay a rotated refresh token against the running local server and show the `409 TOKEN_REUSE`, then point at the database or the log to show every session's refresh token died with it. An audit you cannot show in the product is a document; this one is both.
 
 **Q: "What is still on the audit's open list — what would you fix next?"**
-The named, honest items: notification transport is still in-app only (no email or push for expiry reminders), the mobile session list is client-side only, and the docs-level risks we logged carry fix paths rather than pretend-fixes — that is what the universal "weakest point" answer says, and I own it the same way. None of them weakens the security core: the fail-closed boot, the committed revocation, the single-connection transactions and the version pinning are all shipped and demonstrable. An audit that ends with "everything is perfect" is the one you should distrust.
+The named, honest items: notification transport is still in-app only (no email or push for expiry reminders), the Active Sessions list shows sign-in metadata (device, IP, sign-in time) rather than live "last seen" heartbeats, and the docs-level risks we logged carry fix paths rather than pretend-fixes — that is what the universal "weakest point" answer says, and I own it the same way. None of them weakens the security core: the fail-closed boot, the committed revocation, the single-connection transactions and the version pinning are all shipped and demonstrable. An audit that ends with "everything is perfect" is the one you should distrust.
 
 ---
 

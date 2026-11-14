@@ -12,12 +12,12 @@ flowchart TB
         Admin_Microservice["Admin<br/>review queue"]
         Org_Microservice["Organisation<br/>members"]
         Profile_Microservice["Profile"]
-        Api_Client["Api_Client<br/>single-flight token refresh<br/>SecureStore JWTs"]
+        Api_Client["Api_Client<br/>single-flight token refresh<br/>AsyncStorage JWTs (docutrust.session.v1)"]
     end
 
-    subgraph Rest_Boundary["Layer 2 - REST boundary: Pure Java 21 (com.sun.net.httpserver, no Spring) - 74 routes"]
+    subgraph Rest_Boundary["Layer 2 - REST boundary: Pure Java 21 (com.sun.net.httpserver, no Spring) - 75 routes (56 core + 20 auth)"]
         direction LR
-        Router["Router<br/>74 paths, :id patterns"]
+        Router["Router<br/>75 paths total, :id patterns<br/>(56 core-service + 20 auth-service)"]
         Middleware["Middleware<br/>CORS / logging / errors"]
         Auth_Guard["Auth_Guard<br/>JWT verify + role check"]
         Rate_Limiter["Rate_Limiter<br/>Bucket4j token buckets<br/>auth 20/min, public-share 30/min"]
@@ -29,7 +29,7 @@ flowchart TB
         direction LR
         Login_Service["Login_Service<br/>passwords, sessions, MFA"]
         OTP_Service["OTP_Service<br/>hashed 6-digit codes"]
-        Mail_Service["Mail_Service<br/>Brevo email"]
+        Mail_Service["Mail_Service<br/>Notix email (usenotix.dev)"]
         StepUp_Service["StepUp_Service<br/>5-min second-factor token"]
         Token_Service["TokenService<br/>listSessions / revokeById"]
         Document_Service["Document_Service<br/>vault + versions"]

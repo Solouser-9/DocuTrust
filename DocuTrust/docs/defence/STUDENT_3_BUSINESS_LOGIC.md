@@ -14,10 +14,10 @@ Read your role section in `DEFENCE_GUIDE.md` first, then rehearse from here; `do
 
 **My numbers:**
 
-- **74 logical API routes across two services; my slice is the 56 in core-service** (`routes=56`, printed at core-service's boot) — the 13 document routes, the 6 owner share routes, the 5 public share/download routes, the 5 verification routes, the public verify page **and the RC-1 `accept-invite` route** (organisation logic that lives at an auth-prefixed address; the gateway routes it here by exact match). All reachable through the gateway on :8080.
+- **75 logical API routes across two services; my slice is the 56 in core-service** (`routes=56`, printed at core-service's boot) — the 13 document routes, the 6 owner share routes, the 5 public share/download routes, the 5 verification routes, the public verify page **and the RC-1 `accept-invite` route** (organisation logic that lives at an auth-prefixed address; the gateway routes it here by exact match). All reachable through the gateway on :8080.
 - 15 database tables built by 12 migrations; V02 builds `documents`, V03 builds `document_versions` / `document_history` / `shares`, V09 pins verification to versions, V11 adds the OTP-gating fields on `shares`.
 - The share and tamper demos run live: API calls flip a share through open, revoke and 409, and the two-byte tamper flip turns a verification verdict to `tampered` in front of the audience.
-- 45 mobile screens, of which the **12 vault screens** are mine.
+- 46 mobile screens, of which the **12 vault screens** are mine.
 - Uploads: **25 MB** cap (`413` beyond it), 6 allowed MIME types (`415` otherwise), 10 document types, sensitive types `medical` and `financial` forced into admin review.
 - Encryption at rest: **AES-256-GCM**, random 12-byte IV per file, 128-bit authentication tag, 8 KB streaming chunks, key from the environment (`VAULT_KEY`, never in code); **SHA-256 computed while streaming** and re-verified on every download.
 - Sharing: 43-character link tokens, expiry up to 8760 hours, optional max views and passcode, instant revocation, **single-use 5-minute download tickets**, and optional OTP gating pinned to one recipient inbox (`401 SHARE_OTP_REQUIRED` until verified).
@@ -145,7 +145,7 @@ Then demo: on your local machine, flip two bytes inside a file in the vault dire
 
 1. **Route + controller.** `POST /api/documents` → `DocumentController.upload()` → `DocumentService.upload(ctx.user, ctx.multipart(), ctx.ip())`.
 2. **Validation before any bytes are stored.**
-   The multipart `file` part must exist and be non-empty; `file.data.length > MAX_FILE_BYTES` (25 MB) throws `413 FILE_TOO_LARGE`; `DocumentService.resolveMime` normalises the content type (falling back to a filename extension guess) and rejects anything outside `ALLOWED_MIME` — PDF, PNG, JPEG, WebP, DOC, DOCX — with `415 UNSUPPORTED_MEDIA_TYPE`.
+   The multipart `file` part must exist and be non-empty; `file.data.length > MAX_FILE_BYTES` (25 MB) throws `413 FILE_TOO_LARGE`; `DocumentService.resolveMime` normalises the content type (falling back to a filename extension guess) and rejects anything outside `ALLOWED_MIME` — PDF, PNG, JPEG, WebP, DOC, DOCX — with `415 UNSUPPORTED_MEDIA_TYPE`, then verifies the file's magic bytes so a renamed binary cannot masquerade as a document.
    Title and `docType` go through `Validator.required` and `Validator.oneOf(DOC_TYPES)`; a supplied `folderId` must already belong to the caller (`folderIdOrNull` checks `SELECT 1 FROM folders WHERE id = ? AND owner_id = ?`).
 3. **The vault address.** `FileVault.newStorageKey()` returns a two-level fan-out path like `ab/ab…-….bin` from a UUID — unguessable, and `FileVault.pathOf` refuses any key containing `..` or a leading `/`, so a crafted key cannot escape the vault directory.
 4. **One streaming pass: hash and encrypt together.**

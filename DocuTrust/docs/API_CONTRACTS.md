@@ -44,12 +44,12 @@ Both services read the same `JWT_SECRET`, so a token issued by auth-service is v
 | 409 | CONFLICT | duplicate email, concurrent version, token reuse |
 | 409 | SHARE_EXPIRED / SHARE_REVOKED / SHARE_MAX_VIEWS | link no longer usable |
 | 410 | GONE | expired link (public verify/share) |
-| 413 | FILE_TOO_LARGE | > 25 MB |
+| 413 | FILE_TOO_LARGE | > 25 MB (the gateway answers its own 413 `PAYLOAD_TOO_LARGE` before an oversized body ever reaches a service) |
 | 415 | UNSUPPORTED_MEDIA_TYPE | file type not allowed |
 | 429 | RATE_LIMITED | too many attempts (Bucket4j token bucket per scope + IP) |
 | 440 | MFA_REQUIRED | TOTP code required for this account |
 | 440 | MFA_EMAIL_CHALLENGE | email-MFA fallback: body carries `challenge`; POST it with the emailed code to /api/auth/verify-otp |
-| 502 | MAIL_SEND_FAILED | Brevo rejected/failed the OTP email (live mode only) |
+| 502 | MAIL_SEND_FAILED | Notix rejected/failed the OTP email (live mode only) |
 | 502 | BAD_GATEWAY | the **gateway** could not reach the target service (auth or core down/unreachable) — `message` names it; the mobile app sees a typed code, never a hang |
 | 500 | INTERNAL_ERROR | logged in audit_logs, generic message to client |
 
@@ -64,8 +64,9 @@ Both services read the same `JWT_SECRET`, so a token issued by auth-service is v
 | Method | Path | Roles | Request | Response data |
 |--------|------|-------|---------|---------------|
 | POST | /api/auth/register | – | `{email, password, fullName, phone?, orgName?}` | `{user, message}`; emails a 6-digit registration OTP (10 min, single use) |
-| POST | /api/auth/login | – | `{email, password, mfaCode?, useEmailMfa?}` | `{user, accessToken, refreshToken}` · pending email → `403 EMAIL_NOT_VERIFIED` · if `mfa_enabled` and no code → `440 MFA_REQUIRED` · if `useEmailMfa:true` → `440 MFA_EMAIL_CHALLENGE` with `{challenge, email (masked)}` |
+| POST | /api/auth/login | – | `{email, password, mfaCode?, useEmailMfa?}` | `{user, accessToken, refreshToken}` · pending email → `403 EMAIL_VERIFICATION_REQUIRED` · if `mfa_enabled` and no code → `440 MFA_REQUIRED` · if `useEmailMfa:true` → `440 MFA_EMAIL_CHALLENGE` with `{challenge, email (masked)}` |
 | POST | /api/auth/verify-otp | – | `{email, otp}` or `{challenge, code}` | registration OTP activates the account and returns `{user, accessToken, refreshToken}`; an `mfa_challenge` + code finishes email-MFA login |
+| POST | /api/auth/resend-otp | – | `{email}` | re-issues the pending account's 6-digit registration OTP (a `pending` user) or a fresh password-reset OTP otherwise; always `200 {sent:true}` — the reply never reveals whether the address exists |
 | POST | /api/auth/refresh | – | `{refreshToken}` | `{accessToken, refreshToken}` (rotation: old token revoked with `replaced_by`; reuse → 409 TOKEN_REUSE — the family revocation **commits first**, an `auth.token_reuse` audit row is written, then the 409 is returned) |
 | GET | /api/auth/sessions | any | – | data is an array of the caller's active sessions, newest first: `[{id, device, ip, createdAt, expiresAt}]` — device is captured from the login User-Agent and ip from the request; only rows with `revoked_at IS NULL AND expires_at > now()` are listed |
 | DELETE | /api/auth/sessions/:id | any | – | `{ok:true, data:{revoked, id}}`; surgical `revokeById` (`UPDATE refresh_tokens SET revoked_at = now() WHERE id = ? AND user_id = ?`) — `revoked:false` for unknown, already-revoked or foreign sessions; the token-family cascade is never triggered |
@@ -85,7 +86,7 @@ Both services read the same `JWT_SECRET`, so a token issued by auth-service is v
 
 `user` object: `{id, email, fullName, phone, role, orgId, status, mfaEnabled, emailVerified, lastLoginAt, createdAt, orgName?}` — `orgName` is emitted for org members on `GET/PATCH /api/auth/me` and on admin user rows.
 
-**OTP engine (shared by all five flows):** codes are 6 digits from `SecureRandom`, stored only as `sha256(purpose:email:code)`, single-use, 10-minute TTL (24 h for invites), burned after 5 wrong attempts; at most one live code per (purpose, target). In `MAIL_MODE=dev` codes are echoed in the `X-Dev-OTP` response header (bodies never carry them); in `MAIL_MODE=live` they travel only by Brevo email.
+**OTP engine (shared by all six flows):** codes are 6 digits from `SecureRandom`, stored only as `sha256(purpose:email:code)`, single-use, 10-minute TTL (24 h for invites), burned after 5 wrong attempts; at most one live code per (purpose, target). Purposes: `registration`, `password_reset`, `mfa_login`, `step_up`, `share_access`, `org_invite`. In `MAIL_MODE=dev` codes are echoed in the `X-Dev-OTP` response header (bodies never carry them); in `MAIL_MODE=live` they travel only by Notix email.
 
 ## 2. Documents (auth; ownership enforced in SQL WHERE owner_id = :me) — served by **core-service :9000** via the gateway
 
@@ -193,10 +194,10 @@ Verification request object: `{id, documentId, requesterId, verifierName, verifi
 | Method | Path | Notes |
 |--------|------|-------|
 | GET | /api/health | `{ok:true, db:true, uptimeSeconds}` |
-| GET | /api/meta | app metadata for SEO/indexing `{name, tagline, description, roles[], screens:45, features:216}` |
+| GET | /api/meta | app metadata for SEO/indexing `{name, tagline, description, roles[], screens:46, features:216}` |
 
 ### Rate limiting
 Auth endpoints (login/register/forgot-password/reset-password-otp/verify-otp/accept-invite), the step-up pair, and the public share-link and verify endpoints are rate limited per scope + IP: auth 20/min, public-share 30/min, public-verify 20/min, others 10/min → `429 RATE_LIMITED`. Implemented with Bucket4j token buckets (one per scope|IP, held in a Caffeine cache); token buckets smooth bursts instead of permitting a full window at once. The limiter runs **inside each service** on top of its own router — the gateway forwards everything and adds no limits of its own.
 
 ### Multipart spec
-`Content-Type: multipart/form-data`; file field MUST be named `file`. Allowed mime: `application/pdf, image/png, image/jpeg, image/webp, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Max size **25 MB**. Server computes SHA-256 while streaming, encrypts with AES-256-GCM, stores `<uuid>.bin` in vault dir.
+`Content-Type: multipart/form-data`; file field MUST be named `file`. Allowed mime: `application/pdf, image/png, image/jpeg, image/webp, application/msword, application/vnd.openxmlformats-officedocument.wordprocessingml.document`. Max size **25 MB**. The server also verifies magic bytes (file signatures) after the MIME allow-list, so a renamed binary is rejected with `415` even when the extension looks harmless. It computes SHA-256 while streaming, encrypts with AES-256-GCM, stores `<uuid>.bin` in vault dir.

@@ -21,7 +21,7 @@ This file is the complete rehearsal brief for the student presenting **Student 1
 
 **My numbers:**
 
-- **74 logical API routes across two services** — 56 registered in core-service's `Main.start` (`routes=56`, incl. the RC-1 `accept-invite`), 19 in auth-service (`routes=19`); each service prints its own count at boot
+- **75 logical API routes across two services** — 56 registered in core-service's `Main.start` (`routes=56`, incl. the RC-1 `accept-invite`), 20 in auth-service (`routes=20`); each service prints its own count at boot
 - **3 runnable services** — gateway :8080 (pure JDK reverse proxy), auth-service :8081, core-service :9000; the identical platform skeleton (Router → Middleware → Ctx) runs inside both working services
 - **15 database tables — one shared database (Neon)** — built by migrations V01–V12 (plus `schema_migrations`, the migration runner's own clipboard, which is not one of ours); core-service is the only migrator (auth's is hardcoded off)
 - **12 migrations** — one numbered SQL file each in `database/migrations/`
@@ -30,7 +30,7 @@ This file is the complete rehearsal brief for the student presenting **Student 1
 - **3 roles** — `admin` > `org_manager` > `member`, enforced in `Middleware.requireRole`
 - Connection pool: **min 2 idle, max 10 connections**, 10-second connection timeout, 30-minute max connection lifetime (HikariCP)
 - Request executor: **32 worker threads** (`Executors.newFixedThreadPool(32)` in `Main.start`)
-- Request body cap: **25 MB** (`Ctx.MAX_BODY_BYTES`, rejected with HTTP 413)
+- Request body cap: **26 MB** (`Ctx.MAX_BODY_BYTES` — a little over the 25 MB file limit, rejected with HTTP 413)
 - Access-token lifetime: **900 seconds (15 minutes)** — `JwtService.ACCESS_TTL_SECONDS`
 - Rate-limit budgets: **20/min for `auth`, 30/min for `public-share`, 20/min for `public-verify`, 10/min default** — `RateLimiter.SCOPE_DEFAULTS`
 - Migration ledger: **`schema_migrations` (name TEXT PRIMARY KEY, applied_at timestamptz)**, created by `Migrator.apply`
@@ -41,9 +41,9 @@ This file is the complete rehearsal brief for the student presenting **Student 1
 
 ## Elevator pitch (≈ 1 minute)
 
-> "I built the skeleton everything else hangs on — and since the microservices refactor, that skeleton runs in three processes. DocuTrust's backend is pure Java 21 on the JDK's built-in HTTP server — no Spring — and every request is still matched by my hand-written router and passes through the same middleware chain: CORS, logging, JWT authentication, role guards and rate limiting. The chain lives in the shared module and runs identically inside core-service (56 routes) and auth-service (19 routes), in front of a **single shared Neon database** with one schema doing security work: fifteen tables with CHECK constraints, foreign keys, and append-only triggers so that even a database console cannot rewrite an audit trail. Each service gets its own small HikariCP pool (≤ 5 connections — sized for Neon's free tier), and exactly one service migrates. My proof is simple: the boot logs print `migrations=12, routes=56` and `routes=19`, `mvn clean install` builds the three jars in one command, and the gateway's banner names both upstreams — my routers are what sits behind it."
+> "I built the skeleton everything else hangs on — and since the microservices refactor, that skeleton runs in three processes. DocuTrust's backend is pure Java 21 on the JDK's built-in HTTP server — no Spring — and every request is still matched by my hand-written router and passes through the same middleware chain: CORS, logging, JWT authentication, role guards and rate limiting. The chain lives in the shared module and runs identically inside core-service (56 routes) and auth-service (19 routes), in front of a **single shared Neon database** with one schema doing security work: fifteen tables with CHECK constraints, foreign keys, and append-only triggers so that even a database console cannot rewrite an audit trail. Each service gets its own small HikariCP pool (≤ 5 connections — sized for Neon's free tier), and exactly one service migrates. My proof is simple: the boot logs print `migrations=12, routes=56` and `routes=20`, `mvn clean install` builds the three jars in one command, and the gateway's banner names both upstreams — my routers are what sits behind it."
 
-*Then demo:* run one request live against the local server (a `GET /api/admin/stats` with an admin token) and show the console line `[http] GET /api/admin/stats -> 200 (... ms)` appear as it is served; then open the SQL editor and run a manual `UPDATE` against `audit_logs` so the audience watches PostgreSQL itself throw the append-only exception. The numbers on screen — `migrations=12, routes=74` — come from the boot log of `Main.start`, so the claim checks itself.
+*Then demo:* run one request live against the local server (a `GET /api/admin/stats` with an admin token) and show the console line `[http] GET /api/admin/stats -> 200 (... ms)` appear as it is served; then open the SQL editor and run a manual `UPDATE` against `audit_logs` so the audience watches PostgreSQL itself throw the append-only exception. The numbers on screen — `migrations=12, routes=56` — come from core-service's boot log of `Main.start`, so the claim checks itself.
 
 ---
 
@@ -55,7 +55,7 @@ Every path below exists in the repository today — open any of them during the 
 
 | File | What it does, in one plain-English sentence |
 |---|---|
-| `http/Router.java` | The hand-written menu index: it matches an incoming method + path against all 74 registered routes, prefers static segments (like `/expiring`) over parameters (like `/:id`), and turns any unknown request into a clean 404 envelope instead of a crash. |
+| `http/Router.java` | The hand-written menu index: it matches an incoming method + path against all 75 registered routes, prefers static segments (like `/expiring`) over parameters (like `/:id`), and turns any unknown request into a clean 404 envelope instead of a crash. |
 | `http/Middleware.java` | The security lane every protected request walks through: `authenticate` checks the bearer JWT and loads the user, `requireRole`/`requireAnyRole` enforce `admin`/`org_manager`/`member` (auditing every denial), and `rateLimited` applies the per-scope, per-IP token bucket. |
 | `http/Ctx.java` | The standard order slip: one object per request that carries the path, query, route params, the parsed JSON or multipart body (capped at 25 MB), the authenticated user, and every response helper — including the CORS headers stamped onto every reply. |
 | `http/Handler.java` | The one-line contract shared by router, middleware and controllers: a handler receives a `Ctx` and either responds or throws. |
@@ -80,7 +80,7 @@ Every path below exists in the repository today — open any of them during the 
 | File | What it does, in one plain-English sentence |
 |---|---|
 | `config/Config.java` | Loads configuration once at boot (system properties > environment variables > optional `.env` file) and runs the fail-fast gates — weak/placeholder JWT secret (E-3), vault-key format (D-1), localhost-only demo seeding, live-mail credentials — refusing to start with a human explanation instead of a runtime surprise. |
-| `Main.java` | The composition root: `Config.load()`, migrate, construct the pool and every service and controller, register all 74 routes, seed, start the scheduler and the HTTP server, then print the proof line `DocuTrust ready on port 8080 (migrations=12, routes=74, db=up, boot=…ms)`. |
+| `Main.java` | The composition root: `Config.load()`, migrate, construct the pool and every service and controller, register all 56 routes, seed, start the scheduler and the HTTP server, then print the proof line `[main] DocuTrust ready on port 9000 (migrations=12, routes=56, db=up, boot=…ms)`. |
 
 ### The database platform — `db/`
 
@@ -95,7 +95,7 @@ Every path below exists in the repository today — open any of them during the 
 
 | Migration | What it adds |
 |---|---|
-| `V01__extensions_and_organisations.sql` | The `pgcrypto` and `pg_trgm` extensions (UUID generation and fuzzy text search), plus the first three tables: `organisations` (with a plan CHECK), `users` (role/status CHECKs, unique email) and the auth scaffolding `refresh_tokens` (unique `token_hash`) and `password_resets`. |
+| `V01__extensions_and_organisations.sql` | The `pgcrypto` and `pg_trgm` extensions (UUID generation and fuzzy text search), plus the first four tables: `organisations` (with a plan CHECK), `users` (role/status CHECKs, unique email) and the auth scaffolding `refresh_tokens` (unique `token_hash`, plus the `device`/`ip` session columns) and `password_resets`. |
 | `V02__folders_documents.sql` | `folders` (unique folder name per owner + parent) and `documents` (doc_type/status/review_status CHECKs, reminder window), including the star constraint `documents_sensitive_needs_review`: a medical or financial document physically cannot be `active` without review. |
 | `V03__versions_history_shares.sql` | `document_versions` (UNIQUE on document + version number, positive file size), `document_history` (the auto-written timeline) and `shares` (permission CHECK, view-count guards, the 43-character link-token rule, and a CHECK that every share is either to a user or a link). |
 | `V04__verification_notifications.sql` | `verification_requests` (status/result CHECKs, unique token), `notifications` and per-user `settings` (reminder offset between 1 and 90 days). |
@@ -106,12 +106,13 @@ Every path below exists in the repository today — open any of them during the 
 | `V09__verification_pinning.sql` | Adds `version_id` to `verification_requests` and backfills it, so every verification proof is pinned to the exact document version that existed when it was minted (audit finding F-4). |
 | `V10__email_otps.sql` | The `email_otps` table of the OTP security overhaul — one row per hashed, single-use, purpose-salted code — plus three indexes for target, user and share lookups. |
 | `V11__shares_require_otp.sql` | Adds `require_otp` and `otp_recipient_email` to `shares`, turning a share link into a doorman that checks one emailed code. |
+| `V12__expand_mfa_secret.sql` | Widens `users.mfa_secret` to `VARCHAR(255)` so TOTP secrets can be stored vault-encrypted (`gcm:v1:…`) instead of as plaintext. |
 
 ### The mobile shell I own — `mobile/src/`
 
 | File | What it does, in one plain-English sentence |
 |---|---|
-| `mobile/src/screens/index.js` | The screen registry (`SCREEN_REGISTRY`, 45 entries, counted by `SCREEN_COUNT`): one place where a screen name maps to its component, owning module and title, so navigation, deep links and notification taps all share one directory instead of ad-hoc paths. |
+| `mobile/src/screens/index.js` | The screen registry (`SCREEN_REGISTRY`, 46 entries, counted by `SCREEN_COUNT`): one place where a screen name maps to its component, owning module and title, so navigation, deep links and notification taps all share one directory instead of ad-hoc paths. |
 | `mobile/src/navigation/RootNavigator.js` | The app switcher: builds the stacks from the registry and mounts the admin stack (`AdminStack`) only when the session role is `admin` — role-based navigation decided in one file. |
 | `mobile/src/screens/DashboardScreen.js` | The member's home screen: the shell view that greets the user and routes into the documents, shares and notifications flows. |
 | `mobile/src/screens/AdminDashboardScreen.js` | The registrar console's home screen: the admin-side shell over the review queue, users and audit views. |
@@ -211,16 +212,16 @@ The read example above is half the story; a `POST /api/documents` upload walks t
 2. `DocumentService.upload()` (Student 3's feature) runs inside one `db.tx(...)`: the document row, version one, and the first history entry commit together or not at all — one connection, no nesting.
 3. My triggers take over on commit: `trg_documents_history` writes the `created` history row automatically, and `trg_version_sync` mirrors the version's `sha256`, size and mime type onto the document head — the schema doing bookkeeping no Java code has to remember.
 
-### The 74 routes at a glance — now split across two services
+### The 75 routes at a glance — now split across two services
 
 The route count is not a slogan; it is the registration section, countable line by line. Since Phase 2 it lives in **two files**: the "public auth" and "authenticated profile & MFA / sessions" rows below are registered in **auth-service's** `Main` (19 routes there, including its own health route), and every other row is registered in **core-service's** `Main` (56 routes, still including the RC-1 `accept-invite`):
 
 | Registration group | How they are registered | Count |
 |---|---|---|
 | Public health & meta | `publicRoute` | 2 |
-| Public auth (register, login, forgot, reset, verify-otp, accept-invite) | `rateLimited("auth", …)` | 6 |
-| Public auth continued (refresh, logout, verify-email) | `publicRoute` | 3 |
-| Authenticated profile & MFA (`me`, change-password, step-up, mfa/*) | `auth` | 8 |
+| Public auth (register, login, forgot, reset, verify-otp, resend-otp — auth-service) plus accept-invite (core-service, RC-1) | `rateLimited("auth", …)` | 7 |
+| Public auth continued (refresh, logout, verify-email — auth-service) | `publicRoute` | 3 |
+| Authenticated profile & MFA (`me` GET+PATCH, change-password, step-up pair, mfa/*) | `auth` | 8 |
 | Authenticated sessions (Active Sessions list + revoke) | `auth` | 2 |
 | Documents (list, upload, expiring, get/patch/delete, restore, permanent, versions, download, history) | `auth` | 13 |
 | Folders | `auth` | 5 |
@@ -231,7 +232,7 @@ The route count is not a slogan; it is the registration section, countable line 
 | Notifications & settings | `auth` | 5 |
 | Admin (stats, review queue, review detail, decision, users, status, documents, audit logs) | `role("admin", …)` | 8 |
 | Organisation (members, invite, role change, remove, stats) | `anyRole("admin", "org_manager", …)` | 5 |
-| **Total** | `router.routeCount()` printed at each boot — core-service `routes=56`, auth-service `routes=19` (18 auth + its health) | **74 logical** |
+| **Total** | `router.routeCount()` printed at each boot — core-service `routes=56`, auth-service `routes=20` (19 auth + its health) | **75 logical** (health is registered by both services, so the logical path count dedupes it) |
 
 ### The schema's guarantees, demonstrated live
 
@@ -249,7 +250,7 @@ Five refusals an examiner can watch the database itself produce, each traceable 
 
 | My claim | Where an examiner verifies it |
 |---|---|
-| `routes=56` / `routes=19` | Printed by each service's boot (core-service `Main.start`, auth-service `Main`); counted from the two registration blocks |
+| `routes=56` / `routes=20` | Printed by each service's boot (core-service `Main.start`, auth-service `Main`); counted from the two registration blocks |
 | `migrations=12` | Printed by core-service's boot (`[main] migrations applied: 12`); twelve files in `database/migrations/` — auth-service prints `migrations skipped` instead |
 | 15 tables | The CREATE TABLE statements across V01–V05 and V10 — **one shared database** for both services |
 | 3 runnable jars | `mvn clean install` on a clean clone packs `docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar` — the one-command build works from nothing |
@@ -323,19 +324,19 @@ Then up to ten queries run at once and the other requests wait to borrow a conne
 A nested transaction would hold two pool connections at once — the outer one and the inner one — which on a bounded 10-connection pool is a recipe for self-inflicted deadlock, and worse, the two could commit independently: the outer work rolls back while the inner audit row survives, so the trail claims events that never happened. That exact bug is audit finding C-1. The fix is transaction hygiene: one connection per unit of work, and helpers receive the already-open connection instead of starting their own — for example `NotificationService.notify(Connection c, …)` takes the caller's connection, it never borrows a second one. Side effects that may legitimately lag, like best-effort audit writes, run after the outer commit, so the trail can only be late, never false.
 
 **Q: "How do you track which migrations have run, and why no checksums?"**
-The runner keeps its own clipboard: `Migrator.apply` first creates `schema_migrations` (a name plus `applied_at`), and for each `V*.sql` in sorted filename order it checks, inside the same transaction, whether that name is already recorded — if not, it executes the file statement-by-statement and inserts the name, committing both together. So a fresh database runs all eleven and a five-month-old database runs only what it is missing, and a re-run is always a no-op. We deliberately do not checksum file contents: migrations are append-only history, reviewed in version control — you fix forward with V12, never edit V07 in place, exactly like the LEGO instructions cannot be reordered once built.
+The runner keeps its own clipboard: `Migrator.apply` first creates `schema_migrations` (a name plus `applied_at`), and for each `V*.sql` in sorted filename order it checks, inside the same transaction, whether that name is already recorded — if not, it executes the file statement-by-statement and inserts the name, committing both together. So a fresh database runs all twelve and a five-month-old database runs only what it is missing, and a re-run is always a no-op. We deliberately do not checksum file contents: migrations are append-only history, reviewed in version control — you fix forward with V12, never edit V07 in place, exactly like the LEGO instructions cannot be reordered once built.
 
 **Q: "Why are the append-only rules database triggers and not just code discipline?"**
 Because the whole point of an audit trail is that it survives the failure of everything above it. `trg_history_immutable` and `trg_audit_immutable` execute `forbid_history_mutation` / `forbid_audit_mutation`, which raise an exception on any UPDATE or DELETE — including from a manual SQL console, a migration, or a future bug. Application discipline is a promise; a trigger is physics. It is also the honest answer to "what if someone with database credentials goes rogue": they can add rows, but they cannot quietly rewrite the past, and attempts are loud, not silent.
 
 **Q: "After the refactor, where does routing actually live — gateway or service?"**
-Both, in a deliberate division of labour. The **gateway** answers one question only: *which building* — RC-1's exact match first, then the `/api/auth/` prefix, then the default; it never inspects roles or bodies. **Inside each service**, my Router still answers *which room* — method + path pattern matching with static-over-param scoring, exactly as before. The two layers never overlap: the gateway forwards byte-for-byte and cannot 404 a known service route, and the services 404 on their own unknown paths. That is why the total menu is unchanged: 74 dishes, one cashier, two floor directories.
+Both, in a deliberate division of labour. The **gateway** answers one question only: *which building* — RC-1's exact match first, then the `/api/auth/` prefix, then the default; it never inspects roles or bodies. **Inside each service**, my Router still answers *which room* — method + path pattern matching with static-over-param scoring, exactly as before. The two layers never overlap: the gateway forwards byte-for-byte and cannot 404 a known service route, and the services 404 on their own unknown paths. That is why the total menu is unchanged by the proxy itself: 75 dishes today (56 core + 20 auth), one cashier, two floor directories.
 
 **Q: "Why PreparedStatements everywhere, rather than building SQL strings?"**
 Three reasons. Security: the SQL shape is fixed and only values are sent, so a user typing `' OR 1=1 --` into a search box is stored as text, never executed as SQL — the injection simply has nowhere to happen. Correctness: types are bound explicitly (UUIDs as UUIDs, timestamps as timestamps), which kills a whole class of quoting bugs. Performance: the database can reuse a prepared statement's execution plan instead of re-parsing a new string every time. Every query in every service and in the middleware follows this one pattern, so there is no "clever" exception to audit.
 
 **Q: "Beyond the route table, where does static-over-param routing actually pay off in this API?"**
-All over the menu. `/api/documents/expiring` exists alongside `/api/documents/:id`; `/api/shares/incoming` alongside `/api/shares/:id`; `/api/notifications/read-all` alongside `/api/notifications/:id/read`. Without precedence, "expiring", "incoming" and "read-all" would be parsed as UUIDs, fail parsing, and surface as mysterious 404s — the classic framework foot-gun. Because `Router.match` scores candidates by static segments, the specific path always wins, and because the boot log prints `routes=74`, an examiner can count the menu live and see that every registered dish is findable.
+All over the menu. `/api/documents/expiring` exists alongside `/api/documents/:id`; `/api/shares/incoming` alongside `/api/shares/:id`; `/api/notifications/read-all` alongside `/api/notifications/:id/read`. Without precedence, "expiring", "incoming" and "read-all" would be parsed as UUIDs, fail parsing, and surface as mysterious 404s — the classic framework foot-gun. Because `Router.match` scores candidates by static segments, the specific path always wins, and because the boot logs print `routes=56` (core) and `routes=20` (auth), an examiner can count the menu live and see that every registered dish is findable.
 
 **Q: "What happens to an in-flight request if the database dies mid-operation?"**
 The borrow or the query throws; `Tx.with` rolls the transaction back — autocommit restored in the `finally` — and the exception is rethrown up to the router, which answers a generic 500 envelope and writes the `http.internal_error` audit row. The server itself does not fall over: the pool keeps the surviving connections, HikariCP keeps retrying on demand, `Database.healthy()` (a `SELECT 1`) reports honestly, and `/api/health` shows `db:false` while the boot-style log would print `db=DOWN`. Recovery needs no restart: the next request that borrows successfully is served normally.
@@ -353,9 +354,9 @@ The router does, twice. Success responses go through `Ctx.ok`/`created`/`okPage`
 
 ## The handshake — how my slice feeds the other five
 
-- **If you ask me about tokens, OTPs or Brevo → that's Student 2's area.** My side of the border: `Middleware.authenticate` is where every JWT is verified and where `401 TOKEN_EXPIRED` is born — I verify the badge; Student 2 decides what badges exist, how they rotate, and what the OTP engine mails. My rate limiter's 20/min `auth` scope is what stands between code-guessers and their OTP engine.
+- **If you ask me about tokens, OTPs or Notix → that's Student 2's area.** My side of the border: `Middleware.authenticate` is where every JWT is verified and where `401 TOKEN_EXPIRED` is born — I verify the badge; Student 2 decides what badges exist, how they rotate, and what the OTP engine mails. My rate limiter's 20/min `auth` scope is what stands between code-guessers and their OTP engine.
 - **If you ask me about encryption, share guards or verification → that's Student 3's area.** My side: their entire business layer rides on my platform — the atomic share-guard `UPDATE` runs inside my `Tx.with` on my HikariCP pool, and their "zero rows moved" reasoning depends on my single-connection transaction rule. The Caffeine read cache they use is a platform library I brought in.
 - **If you ask me about screens, presenters or the API client → that's Student 4's area.** My side: the envelope and status codes their `ApiClient` unwraps are produced by my `Ctx` and `Router`, and the `401 TOKEN_EXPIRED` distinction is the hook their single-flight refresh hangs on. I also own the shell they live in: the `SCREEN_REGISTRY`, `RootNavigator` role stacks and the Dashboard screen.
 - **If you ask me about audit findings or the fix comments → that's Student 5's area.** My side: several of their findings are fixed *in* my files — C-1 (the one-connection transaction hygiene in `Database`/`Tx`), C-2/C-13 (the migration splitter that survives `;` inside comments), E-3 (the weak-secret refusal in `Config`) and D-1 (the 32-byte vault-key format). Their IDs are cited in those files to this day.
-- **If you ask me about builds, configuration, seeding or deployment → that's Student 6's area.** My side: I own *what* the boot does — wire the pool, apply the migrations, register the routes (in core-service and auth-service alike); Student 6 owns *how it is launched, configured and monitored* — and the gateway that stands in front of both. Their boot logs literally print my numbers: `migrations=12, routes=56` and `routes=19`.
+- **If you ask me about builds, configuration, seeding or deployment → that's Student 6's area.** My side: I own *what* the boot does — wire the pool, apply the migrations, register the routes (in core-service and auth-service alike); Student 6 owns *how it is launched, configured and monitored* — and the gateway that stands in front of both. Their boot logs literally print my numbers: `migrations=12, routes=56` and `routes=20`.
 - **Who most often bridges TO me:** Student 5 — audit findings kept landing in my layer, so their stories start in my files; and Student 3, whose services are the heaviest daily users of my transactions, pool and query mappers. The bridge map in DEFENCE_GUIDE.md routes every schema, pool and router-matching question to this desk.

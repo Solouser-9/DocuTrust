@@ -8,30 +8,30 @@ Read your role section in `DEFENCE_GUIDE.md` first, then rehearse from here; `do
 
 **Role in one line:** how a stranger becomes a trusted user — and how a stolen password alone still is not enough.
 
-**Owns:** `AuthService`, `PasswordService` (PBKDF2), `TokenService` (rotating refresh + reuse detection + `listSessions` + `revokeById`), `MfaService` (TOTP), `JwtService` (hand-rolled HMAC-SHA256 tokens), `OtpService` (hashed one-time codes), `MailService` (Brevo), `StepUpService`, the rate limiter (`RateLimiter` on Bucket4j), and the mobile SecureStore-backed session persistence in the client; the `AuthController` endpoints; the `email_otps` schema; and the eight auth screens on the mobile side — **the whole slice now runs in its own microservice, auth-service on :8081** (Phase 2 of the Strangler Fig refactor), reachable only through the gateway.
+**Owns:** `AuthService`, `PasswordService` (PBKDF2), `TokenService` (rotating refresh + reuse detection + `listSessions` + `revokeById`), `MfaService` (TOTP), `JwtService` (hand-rolled HMAC-SHA256 tokens), `OtpService` (hashed one-time codes), `MailService` (Notix), `StepUpService`, the rate limiter (`RateLimiter` on Bucket4j), and the mobile AsyncStorage-backed session persistence in the client; the `AuthController` endpoints; the `email_otps` schema; and the nine auth screens on the mobile side — **the whole slice now runs in its own microservice, auth-service on :8081** (Phase 2 of the Strangler Fig refactor), reachable only through the gateway.
 
 **Feature claims:** FT-001 to FT-024 plus the post-audit security addendum FT-217 to FT-234 (`docs/FEATURES.md`).
 
 **My numbers:**
 
-- 74 logical API routes across the two services — **mine are the 19 in auth-service** (`routes=19`, printed at auth-service's boot, incl. its own health route): the auth, refresh, OTP, step-up, MFA and Active Sessions routes. The gateway forwards every one of them on `/api/auth/*`, except `accept-invite` which routes to core-service (RC-1).
+- 75 logical API routes across the two services — **mine are the 20 in auth-service** (`routes=20`, printed at auth-service's boot, incl. its own health route): the auth, refresh, OTP (verify + resend), step-up, MFA and Active Sessions routes. The gateway forwards every one of them on `/api/auth/*`, except `accept-invite` which routes to core-service (RC-1).
 - 15 database tables built by 12 migrations, in **one shared Neon database** — V10 adds the `email_otps` table, V11 adds the OTP-gating fields on `shares` (shared with Student 3). auth-service never runs migrations; core-service is the sole migrator.
 - Every OTP flow — including the negative paths — re-driven live with manual API calls (Postman/cURL) at the defence.
 - PBKDF2-HmacSHA256 at **120,000 iterations**, 16-byte per-user salt, 256-bit key, constant-time verify (`PasswordService`).
-- Sessions: **15-minute** access JWT (hand-rolled HMAC-SHA256) plus a **7-day** refresh token, 43 characters, stored only as a SHA-256 hash; the device keeps the JWT pair in `expo-secure-store`, while the backend exposes `GET /api/auth/sessions` and `DELETE /api/auth/sessions/:id` for the user-facing Active Sessions screen.
-- Active Sessions ledger (newest slice): `refresh_tokens` doubles as the user-facing session history — `listSessions` returns the active rows (`id`, `device`, `ip`, `createdAt`, `expiresAt`, newest first) and `revokeById` revokes one row surgically (`UPDATE … WHERE id = ? AND user_id = ?`), so the token-family cascade stays reserved for reuse attacks. On the phone the JWT pair lives in `expo-secure-store` (Keychain/Keystore); a one-time hydration upgrade moves any legacy plaintext copy into SecureStore and scrubs it from AsyncStorage.
+- Sessions: **15-minute** access JWT (hand-rolled HMAC-SHA256) plus a **7-day** refresh token, 43 characters, stored only as a SHA-256 hash; the device keeps the JWT pair in AsyncStorage (`docutrust.session.v1`), while the backend exposes `GET /api/auth/sessions` and `DELETE /api/auth/sessions/:id` for the user-facing Active Sessions screen.
+- Active Sessions ledger (newest slice): `refresh_tokens` doubles as the user-facing session history — `listSessions` returns the active rows (`id`, `device`, `ip`, `createdAt`, `expiresAt`, newest first) and `revokeById` revokes one row surgically (`UPDATE … WHERE id = ? AND user_id = ?`), so the token-family cascade stays reserved for reuse attacks. On the phone the whole session — JWT pair and profile — lives in AsyncStorage under the single `docutrust.session.v1` key (a plain AsyncStorage swap-in replaced the earlier SecureStore approach to dodge an Android 2 KB value-size crash).
 - Email OTPs: **6 digits** from `SecureRandom`, stored as `sha256(purpose:email:code)`, single-use, **10-minute**
-  TTL (**24 h** for invites), **5 attempts** max, at most one live code per (purpose, target), sent through Brevo.
+  TTL (**24 h** for invites), **5 attempts** max, at most one live code per (purpose, target), sent through Notix.
 - Challenge tokens: MFA email challenge JWT **10 minutes** (`typ=mfa_challenge`); step-up token **5 minutes** (`typ=step_up`, header `X-Step-Up-Token`).
 - Rate-limit budgets: **auth 20/min**, public-share 30/min, public-verify 20/min, default 10/min — one Bucket4j bucket per scope|IP in a Caffeine cache.
-- 45 mobile screens, of which the **8 auth screens** are mine (`mobile/src/screens/`).
+- 46 mobile screens, of which the **9 auth screens** are mine (`mobile/src/screens/`), including the OTP-era `VerifyOtp` screen.
 - The headline property: after the overhaul, **no API response ever contains a password, a reset code, or a temporary password** — the inbox is the only place a code exists.
 
 > **Note:** every claim in this brief is verifiable from the public repository alone — the finding IDs are greppable in the code comments, and every flow (happy and negative path) is demonstrated live at the defence with manual API calls (Postman/cURL).
 
 ## Elevator pitch (≈ 1 minute)
 
-> "I own everything that proves who you are — and since the refactor, my slice is its own building: **auth-service on :8081**, reached only through the gateway. Passwords are PBKDF2-hashed; sessions are a 15-minute access JWT plus a rotating refresh token whose reuse is detected and kills the whole token family — B-1 in our audit. On top we shipped an email-OTP layer: six-digit codes, SHA-256-hashed in the database, single-use, ten-minute expiry, five attempts max, sent through Brevo. They power four flows: password reset, email MFA fallback for login — the server answers HTTP 440 with a challenge — step-up verification for destructive actions like permanent deletion, and OTP-gated share links. The security headline: after the overhaul, **no API response ever contains a password, a reset code, or a temporary password** — the inbox is the only place a code exists. And the microservices headline: my tokens are verified by the *other* building with the *same secret ink* — a shared `JWT_SECRET` gives us cross-service JWT validation with no introspection call, so login on :8081 and documents on :9000 just work behind one gateway address. The proof is live: every one of those flows — including the negative paths — is walked with manual API calls through :8080 during the defence."
+> "I own everything that proves who you are — and since the refactor, my slice is its own building: **auth-service on :8081**, reached only through the gateway. Passwords are PBKDF2-hashed; sessions are a 15-minute access JWT plus a rotating refresh token whose reuse is detected and kills the whole token family — B-1 in our audit. On top we shipped an email-OTP layer: six-digit codes, SHA-256-hashed in the database, single-use, ten-minute expiry, five attempts max, sent through Notix. They power six flows: password reset, email MFA fallback for login — the server answers HTTP 440 with a challenge — step-up verification for destructive actions like permanent deletion, and OTP-gated share links. The security headline: after the overhaul, **no API response ever contains a password, a reset code, or a temporary password** — the inbox is the only place a code exists. And the microservices headline: my tokens are verified by the *other* building with the *same secret ink* — a shared `JWT_SECRET` gives us cross-service JWT validation with no introspection call, so login on :8081 and documents on :9000 just work behind one gateway address. The proof is live: every one of those flows — including the negative paths — is walked with manual API calls through :8080 during the defence."
 
 Then demo: on your local machine, replay a rotated refresh token on purpose and let the audience watch the whole token family die with `409 TOKEN_REUSE`; then walk forgot-password → emailed code → reset with the server log and the `X-Dev-OTP` header in dev mode showing where the code travels.
 
@@ -53,7 +53,7 @@ Then demo: on your local machine, replay a rotated refresh token on purpose and 
 |---|---|
 | `server/src/main/java/com/docutrust/service/AuthService.java` | The auth domain orchestrator: register (personal or org), login with TOTP or the email-MFA fallback (`useEmailMfa` → 440 challenge), `verifyOtp` challenge exchange, refresh/logout, OTP password reset, email verification, profile updates, MFA setup/enable/disable, and the step-up-gated password change. |
 | `server/src/main/java/com/docutrust/service/OtpService.java` | The shared one-time-code engine: five purposes (`password_reset`, `mfa_login`, `step_up`, `share_access`, `org_invite`), 6-digit `SecureRandom` codes stored only as `sha256(purpose:email:code)` digests, single-use, 10-minute TTL (24 h invites), a 5-attempt burn, and at most one live code per (purpose, target). |
-| `server/src/main/java/com/docutrust/service/MailService.java` | Delivers OTP emails through Brevo's transactional API in `MAIL_MODE=live` (a failed send is a loud `502 MAIL_SEND_FAILED`, never a silent drop), while `MAIL_MODE=dev` logs the code and hands it to the controller for the `X-Dev-OTP` demo header. |
+| `server/src/main/java/com/docutrust/service/MailService.java` | Delivers OTP emails through Notix's transactional API in `MAIL_MODE=live` (a failed send is a loud `502 MAIL_SEND_FAILED`, never a silent drop), while `MAIL_MODE=dev` logs the code and hands it to the controller for the `X-Dev-OTP` demo header. |
 | `server/src/main/java/com/docutrust/service/StepUpService.java` | Exchanges an emailed OTP for a 5-minute single-purpose JWT (`typ=step_up`) and gates destructive routes through `authorize()`, which throws `403 STEP_UP_REQUIRED` unless the `X-Step-Up-Token` header carries a valid token belonging to the calling user. |
 
 ### The auth controllers — the waiters taking the orders
@@ -80,7 +80,7 @@ Then demo: on your local machine, replay a rotated refresh token on purpose and 
 
 Three indexes back the lookup paths: `idx_email_otps_target` (purpose, recipient_email, created_at DESC), `idx_email_otps_user` and `idx_email_otps_share` — added by the same V10 migration.
 
-### The eight auth screens — `mobile/src/screens/`
+### The nine auth screens — `mobile/src/screens/`
 
 | Screen file | What it does, in one sentence |
 |---|---|
@@ -127,7 +127,7 @@ Three indexes back the lookup paths: `idx_email_otps_target` (purpose, recipient
    The plaintext code exists nowhere in the database.
 5. **The audit row.** Still inside the same transaction, `AuditService.insert(... "auth.password_reset_requested" ...)` writes the append-only audit entry — the whole mint is atomic.
 6. **The email, after the commit.** `mail.sendOtp(email, purpose, code, 10)` runs only after the transaction has committed — no network call ever happens inside a transaction.
-   In `MAIL_MODE=live`, `MailService.send` POSTs a JSON payload to `https://api.brevo.com/v3/smtp/email` with the `api-key` header and turns any non-2xx into `AppException(502, "MAIL_SEND_FAILED", ...)` — a silently dropped OTP would lock users out.
+   In `MAIL_MODE=live`, `MailService.send` POSTs a JSON payload to `https://app.usenotix.dev/api/v1/emails` with the `Authorization: Bearer` header and turns any non-2xx into `AppException(502, "MAIL_SEND_FAILED", ...)` — a silently dropped OTP would lock users out.
    In dev mode the code is printed to the log instead.
 7. **The verification.** `POST /api/auth/reset-password-otp` → `AuthService.resetPasswordOtp` → inside `db.tx`, `OtpService.verify(c, "password_reset", userId, null, email, code)`.
    That method selects the newest live row `... ORDER BY created_at DESC LIMIT 1 FOR UPDATE` — the row lock means a second simultaneous guess waits, then sees the code spent.
@@ -193,7 +193,8 @@ The story, the finding ID and the fix are all readable in the comments around `T
 
 | Purpose (`OtpService` constant) | Triggered by | Delivered to | Consumed by |
 |---|---|---|---|
-| `password_reset` | `POST /api/auth/forgot-password` | the account's own inbox | `POST /api/auth/reset-password-otp` |
+| `registration` | `POST /api/auth/register` (re-issue via `POST /api/auth/resend-otp`) | the new account's inbox | `POST /api/auth/verify-otp` with `{email, otp}` |
+| `password_reset` | `POST /api/auth/forgot-password` (or `resend-otp` for an active account) | the account's own inbox | `POST /api/auth/reset-password-otp` |
 | `mfa_login` | `POST /api/auth/login` with `useEmailMfa: true` → 440 | the account's own inbox | `POST /api/auth/verify-otp` + the challenge JWT |
 | `step_up` | `POST /api/auth/request-step-up` | the account's own inbox | `POST /api/auth/verify-step-up` → the `X-Step-Up-Token` header |
 | `share_access` | `POST /api/public/shares/:token/request-otp` | the owner-pinned `otp_recipient_email` only | `POST /api/public/shares/:token/open-with-otp` |
@@ -208,7 +209,7 @@ The story, the finding ID and the fix are all readable in the comments around `T
 | `403 STEP_UP_REQUIRED` | destructive action without a valid `X-Step-Up-Token` | `request-step-up` → `verify-step-up` → retry with the header |
 | `409 TOKEN_REUSE` | an already-rotated refresh token was presented | log the session out immediately — the family is already revoked |
 | `429 RATE_LIMITED` | the scope's token bucket ran dry | wait; the buckets refill continuously, not in fixed windows |
-| `502 MAIL_SEND_FAILED` | Brevo rejected or failed the send (live mode only) | offer a retry — a silently dropped code would lock users out |
+| `502 MAIL_SEND_FAILED` | Notix rejected or failed the send (live mode only) | offer a retry — a silently dropped code would lock users out |
 
 ### Every lifetime in my slice, at a glance
 
@@ -239,7 +240,7 @@ The story, the finding ID and the fix are all readable in the comments around `T
 | Rate limiter (token bucket) | A coffee-shop punch card that fills itself: every auth request stamps one square; when the minute's squares are gone, the machine politely says come back in sixty seconds — humans barely notice, rapid-fire tools hit a wall. |
 | User enumeration | The leak where "wrong password" and "no such account" sound different, letting an attacker map which emails exist. Every public auth reply here is deliberately identical either way. |
 | Constant-time compare | A guard who always takes exactly the same time to say no, whether the first character or the last was wrong — so the stopwatch itself leaks nothing (`Text.constEq`). |
-| Brevo / `MAIL_MODE` | The postman, plus a flight-simulator switch: `dev` mode prints the code to the log and the `X-Dev-OTP` header so we can rehearse without emailing anyone; `live` mode sends real email. |
+| Notix / `MAIL_MODE` | The postman, plus a flight-simulator switch: `dev` mode prints the code to the log and the `X-Dev-OTP` header so we can rehearse without emailing anyone; `live` mode sends real email. |
 | HTTP 440 | Our own rubber stamp, documented in the API contract: "second factor needed — check your email." The standard codes have no word for that situation, so we printed one. |
 
 ## My ultimate Q&A bank
@@ -256,7 +257,7 @@ The story, the finding ID and the fix are all readable in the comments around `T
 
 **Q: "What exactly changed in the OTP overhaul?"**
 
-> Two anti-patterns died: the password-reset endpoint that returned the reset code in the response, and invites that carried a temporary password in JSON. Their replacements share one engine: six-digit codes from SecureRandom, stored only as sha256 of purpose, target and code, single-use, ten-minute TTL — 24 hours for invites — five wrong attempts burn the code, and one live code per purpose and target. Responses never contain codes in any mode; dev mode puts them in the log and an X-Dev-OTP header, live mode sends real Brevo email. Every flow, including the negative paths, is re-driven live with manual API calls at the defence.
+> Two anti-patterns died: the password-reset endpoint that returned the reset code in the response, and invites that carried a temporary password in JSON. Their replacements share one engine: six-digit codes from SecureRandom, stored only as sha256 of purpose, target and code, single-use, ten-minute TTL — 24 hours for invites — five wrong attempts burn the code, and one live code per purpose and target. Responses never contain codes in any mode; dev mode puts them in the log and an X-Dev-OTP header, live mode sends real Notix email. Every flow, including the negative paths, is re-driven live with manual API calls at the defence.
 
 **Q: "Why did you return a special 440 status for MFA instead of a normal 401?"**
 
@@ -264,7 +265,7 @@ The story, the finding ID and the fix are all readable in the comments around `T
 
 **Q: "Could an attacker brute-force the six-digit code?"**
 
-> They get ten attempts per minute per IP from the shared rate limiter, and each attempt must land inside the code's ten-minute life with a five-attempt burn limit, so the search space is practically unreachable. The limiter plus the short window make guessing a losing game, and failed attempts are audited.
+> They get twenty attempts per minute per IP from the shared rate limiter, and each attempt must land inside the code's ten-minute life with a five-attempt burn limit, so the search space is practically unreachable. The limiter plus the short window make guessing a losing game, and failed attempts are audited.
 
 **Q: "Your tokens are now issued by auth-service but used on core-service — how does core trust them?"**
 
@@ -301,7 +302,7 @@ The story, the finding ID and the fix are all readable in the comments around `T
 > It also lets one table, one index layout and one verification path serve five flows safely, which is what made the overhaul affordable.
 > And because the email is inside the digest, a code that was legitimately issued to one address cannot be verified against another address even within the same flow.
 
-**Q: "What actually happens when Brevo is down?"**
+**Q: "What actually happens when Notix is down?"**
 
 > `MailService.send` treats a provider failure as a loud, immediate `AppException(502, "MAIL_SEND_FAILED", ...)` — never a silent drop, because a user who never receives their code is locked out just as surely as if we refused it.
 > The client translates that into a friendly retry message.
@@ -336,13 +337,11 @@ The story, the finding ID and the fix are all readable in the comments around `T
 > The attacker also cannot rotate the access token, because rotation requires the refresh token — whose reuse would trigger the family revocation.
 > So the design assumes the access token leaks eventually and minimises what fifteen minutes of it can do.
 
-**Q: "Registration returns a `verifyToken` in the response — isn't that the anti-pattern you killed?"**
+**Q: "How does registration verify the email address without leaking anything?"**
 
-> It is the one deliberate survivor, and the difference is what the string unlocks.
-> The killed anti-patterns returned *account credentials*: a reset code that unlocks the password, or a temporary password that *is* the login.
-> The registration `verifyToken` does neither — it is a 43-character opaque token, stored hashed in `password_resets` via `issueOneTimeToken`, valid 24 hours, single-use, and the only thing it can do is flip the caller's own `email_verified` flag through `AuthService.verifyEmail`.
-> It is handed to the person who just created the account, in the same session that created it, so there is no credential being exposed to a stranger.
-> We named it in the review anyway, and the roadmap item is to move that last token fully into the email like every other flow.
+> It never has to trust the response body at all: `register` creates the account as `pending` and mints a 6-digit `registration` OTP through the same engine as every other flow — `sha256(purpose:email:code)` at rest, single-use, 10-minute TTL, five attempts — and emails it.
+> The client then POSTs `/api/auth/verify-otp {email, otp}`, which flips the account to `active` and issues the session tokens; `POST /api/auth/resend-otp {email}` re-issues the code and always answers the same `{sent:true}` whether or not the address exists.
+> No response body ever carries the code (dev mode exposes it only via the `X-Dev-OTP` header and the server log), and the legacy `GET /api/auth/verify-email?token=` link route still exists server-side but nothing mints those tokens any more.
 
 ## The handshake — how my slice feeds the other five
 
@@ -351,10 +350,10 @@ The story, the finding ID and the fix are all readable in the comments around `T
 - **If you ask me about documents, shares or the vault → that's Student 3's area.**
   Here's how my part feeds it: my `OtpService` is the engine behind the OTP-gated share links (purpose `share_access`, the V11 fields on `shares`), and Student 3's permanent-delete route calls my `StepUpService.authorize` before a single byte is touched — the vault cannot be opened destructively without my second factor.
 - **If you ask me about screens, presenters or the API client → that's Student 4's area.**
-  Here's how my part feeds it: my `440 MFA_EMAIL_CHALLENGE`, `403 STEP_UP_REQUIRED` and `409 TOKEN_REUSE` codes are the routing decisions the eight auth screens and the `ApiClient` are built on — the client never guesses when to demand a second factor, my status codes tell it.
+  Here's how my part feeds it: my `440 MFA_EMAIL_CHALLENGE`, `403 STEP_UP_REQUIRED` and `409 TOKEN_REUSE` codes are the routing decisions the nine auth screens and the `ApiClient` are built on — the client never guesses when to demand a second factor, my status codes tell it.
 - **If you ask me about audit findings or the fix comments → that's Student 5's area.**
   Here's how my part feeds it: the B-1, B-2 and B-3 findings live in my `TokenService.rotate` and are the reason the revocation commits first — their IDs are cited in my files' comments, greppable during the defence.
 - **If you ask me about builds, configuration or deployment → that's Student 6's area.**
-  Here's how my part feeds it: my `MailService` reads the `BREVO_*` variables and the `MAIL_MODE` switch from their fail-fast `Config`, and the dev-mode `X-Dev-OTP` header is what makes the live demo possible without sending real email.
+  Here's how my part feeds it: my `MailService` reads the `NOTIX_*` variables and the `MAIL_MODE` switch from their fail-fast `Config`, and the dev-mode `X-Dev-OTP` header is what makes the live demo possible without sending real email.
 - **Who most often bridges to me: Student 4.**
   Every question about the login, MFA, reset, step-up or security screens ends in one of my mechanisms — the client owns the UX of the handshake, I own the handshake.

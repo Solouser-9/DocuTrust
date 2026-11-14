@@ -12,7 +12,7 @@ Rule of thumb: each student owns one backend module + its screens + its docs (ve
 | 4 | Wire routes, error envelope, CORS, logging middleware | Refresh/logout/forgot/reset flows | Document CRUD + list filters/pagination | Share revoke + stats + incoming | Approve/reject + HTML verify page w/ SEO | Admin users/status endpoints |
 | 5 | **Sprint demo:** register→login→upload→list happy path; JSON + password hashing shown live; seed bootstrap | Auth flows demoed live (register, login, refresh, reset) | Document flows demoed live (upload, list, folders) | Share flows demoed live (mint, open, revoke) | Verification flows demoed live (mint, verify page) | Admin flows demoed live (users, status) |
 
-**Week 1 exit criteria:** all V01–V08 migrations (the first eight of the final eleven) applied on Supabase; auth + document flows demoed live; 45-screen navigation skeleton with theme in the mobile app.
+**Week 1 exit criteria:** all V01–V08 migrations (the first eight of the final twelve) applied on Supabase; auth + document flows demoed live; 45-screen navigation skeleton with theme in the mobile app.
 
 ## Week 2 — Product depth (all 46 screens, notifications, review process)
 
@@ -49,7 +49,7 @@ Rule of thumb: each student owns one backend module + its screens + its docs (ve
 
 ## Post-submission hardening note
 
-After the original submission, a pre-production security audit produced three fix batches (config fail-closed hardening; session/token lifecycle surgery; final cleanup). Code-facing results visible in this tree: migrations now run **V01–V09** (V09 adds `verification_requests.version_id` — proof links are pinned to the exact version minted, and the public verify page flags superseded proofs), the registered route count is **65** (`reset-password` now registered and rate-limited), transactions are single-level, and the docs (`FEATURES.md`, `API_CONTRACTS.md`, diagrams) were re-synced to the shipped code. The sprint tables above are kept as the historical plan.
+After the original submission, a pre-production security audit produced three fix batches (config fail-closed hardening; session/token lifecycle surgery; final cleanup). Code-facing results visible in this tree: the migration ledger now runs **V01–V12** (V09 pins verification to versions; V10 adds `email_otps`; V11 the OTP-gated share columns; V12 widens `mfa_secret` for vault-encrypted TOTP secrets), the logical route count is **75** (core-service 56 + auth-service 20, including the OTP-era `resend-otp` endpoint — the counts below were true when each note was written), transactions are single-level, and the docs (`FEATURES.md`, `API_CONTRACTS.md`, diagrams) were re-synced to the shipped code. The sprint tables above are kept as the historical plan.
 
 ## Post-graduation microservices refactor (Phases 1–3, the Strangler Fig)
 
@@ -57,8 +57,8 @@ After the audit, the monolith was refactored into microservices using the **Stra
 
 | Phase | What happened | Verify it |
 |---|---|---|
-| **Phase 1 — modularisation** | The single module became a Maven reactor: `shared` (http stack, config, db, auth, vault) + `core-service` (all 74 routes, port 9000) + four stubs (auth, vault, admin, gateway) | `mvn clean install` → 6/6 modules |
-| **Phase 2 — auth extraction** | The 18 `/api/auth/*` routes moved to **auth-service** (:8081) — 4 files moved byte-identical, core left with 56 routes + the RC-1 exception: `POST /api/auth/accept-invite` deliberately **stays in core** (admin-domain org logic under an auth prefix). Shared `JWT_SECRET` → cross-service JWT validation; auth never runs migrations | core boots `routes=56`, auth boots `routes=19` |
+| **Phase 1 — modularisation** | The single module became a Maven reactor: `shared` (http stack, config, db, auth, vault) + `core-service` (every route, port 9000) + four stubs (auth, vault, admin, gateway) | `mvn clean install` → 6/6 modules |
+| **Phase 2 — auth extraction** | The 19 `/api/auth/*` routes moved to **auth-service** (:8081) — 4 files moved byte-identical, core left with 56 routes + the RC-1 exception: `POST /api/auth/accept-invite` deliberately **stays in core** (admin-domain org logic under an auth prefix). Shared `JWT_SECRET` → cross-service JWT validation; auth never runs migrations | core boots `routes=56`, auth boots `routes=20` |
 | **Phase 3 — the gateway** | `gateway` (:8080) became a real pure-JDK reverse proxy: RC-1 exact-match → core, `/api/auth/*` → auth, everything else → core; forwards method/raw path/raw query/headers/body byte-for-byte, recomputes `X-Forwarded-For`, answers **502 BAD_GATEWAY** when a service is down | login on :8080 works, documents on :8080 work, stop auth → 502 |
 
 **Deployment shape:** both DB-touching services share **one Neon PostgreSQL** (free-tier RAM limits rule out per-service databases; one DB keeps transactions ACID) with `DB_POOL_MAX ≤ 5` each, core alone migrates/schedules/seeds, and `server/Dockerfile` + the root `docker-compose.yml` boot the whole campus with one command.

@@ -1,7 +1,7 @@
 # core-service (Phase 1 modularisation → Phase 2 auth extraction → Phase 3 behind the gateway)
 
 The **vault room** — the original DocuTrust backend, now one of three campus buildings. Phase 1
-renamed the monolith into this module (nothing extracted yet); Phase 2 moved the 18 `/api/auth/*`
+renamed the monolith into this module (nothing extracted yet); Phase 2 moved the 19 `/api/auth/*`
 routes to **auth-service**, leaving **56 routes on port 9000 by convention** (`PORT=9000` in the run
 command; Config's built-in default remains 8080) — including the RC-1 exception:
 `POST /api/auth/accept-invite` is `OrgController.acceptInvite`, admin-domain logic under an auth

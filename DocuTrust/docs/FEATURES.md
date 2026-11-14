@@ -17,15 +17,15 @@ Every feature has a stable ID (`FT-xxx`) used in the defence pack, commit messag
 | FT-008 | Silent token refresh on 401 in the mobile API client |
 | FT-009 | Refresh-token reuse detection → family revocation |
 | FT-010 | Logout revokes refresh token server-side |
-| FT-011 | Email verification link flow |
+| FT-011 | Email verification: a 6-digit registration OTP emailed at sign-up (`verify-otp {email, otp}` activates the account); the legacy `GET /api/auth/verify-email?token=` link route still exists server-side |
 | FT-012 | Forgot-password with no user enumeration |
-| FT-013 | Single-use 15-minute reset codes |
+| FT-013 | Single-use 10-minute reset codes |
 | FT-014 | Reset password with strength rules |
 | FT-015 | TOTP MFA setup (Base32 secret + otpauth URL) |
 | FT-016 | MFA enable after code confirmation |
 | FT-017 | MFA challenge during login (HTTP 440 MFA_REQUIRED) |
 | FT-018 | MFA disable with code proof |
-| FT-019 | Rate limiting on auth endpoints (10/min/IP) |
+| FT-019 | Rate limiting on auth endpoints (20/min/IP in the `auth` scope; other scopes 10/min) |
 | FT-020 | Security screen "where am I signed in": shows the current device session and the server-backed Active Sessions list (`GET /api/auth/sessions`), with remote revoke support via `DELETE /api/auth/sessions/:id` |
 | FT-021 | Change password with current-password proof |
 | FT-022 | Edit profile (fullName, phone) |
@@ -236,7 +236,7 @@ Every feature has a stable ID (`FT-xxx`) used in the defence pack, commit messag
 | FT-195 | Modular monolith layers: Router→Controller→Service→DAO |
 | FT-196 | Hand-rolled JSON serializer/parser (no external libs) |
 | FT-197 | PostgreSQL connection pool with health check |
-| FT-198 | SQL migrations runner (V01→V09, idempotent by filename via `schema_migrations`, one transaction per file, comment/string/dollar-quote-aware splitter — no checksums) |
+| FT-198 | SQL migrations runner (V01→V12, idempotent by filename via `schema_migrations`, one transaction per file, comment/string/dollar-quote-aware splitter — no checksums) |
 | FT-199 | PreparedStatements everywhere (SQL-injection safe) |
 | FT-200 | TransactionManager with rollback-on-exception |
 | FT-201 | CORS for the Expo dev origin |
@@ -251,7 +251,7 @@ Every feature has a stable ID (`FT-xxx`) used in the defence pack, commit messag
 ## M10 — Data, Search & Integrity (FT-209 … FT-216)
 | ID | Feature |
 |----|---------|
-| FT-209 | 14-table relational schema with CHECK + FK constraints |
+| FT-209 | 15-table relational schema with CHECK + FK constraints |
 | FT-210 | Append-only triggers on document_history and audit_logs |
 | FT-211 | Auto-history trigger on document changes |
 | FT-212 | Version-head sync trigger (documents.sha256 mirror) |
@@ -266,12 +266,12 @@ Every feature has a stable ID (`FT-xxx`) used in the defence pack, commit messag
 
 ## Post-audit security addendum (FT-217 … FT-234)
 
-The audit's OTP security overhaul: one hashed, single-use, purpose-salted code engine (`email_otps`, V10) powering five flows, plus the infrastructure upgrade. Every flow is demonstrated live with manual API calls (Postman/cURL).
+The audit's OTP security overhaul: one hashed, single-use, purpose-salted code engine (`email_otps`, V10) powering six flows (registration, password reset, MFA login, step-up, share access, org invites), plus the infrastructure upgrade. The later OTP UI pass added the `VerifyOtp` screen and the dedicated `POST /api/auth/resend-otp` endpoint (auth-service now serves 19 `/api/auth/*` routes + health) — listed here without renumbering the register. Every flow is demonstrated live with manual API calls (Postman/cURL).
 
 | ID | Feature |
 |----|---------|
 | FT-217 | Email OTP engine: 6-digit SecureRandom codes, SHA-256 `purpose:email:code` digests at rest, single-use, 10-min TTL (24 h invites), 5-attempt burn, one live code per target |
-| FT-218 | Brevo email delivery (`MailService`): `MAIL_MODE=live` posts to Brevo's transactional API; `MAIL_MODE=dev` logs the code and echoes it in `X-Dev-OTP` (bodies never carry codes) |
+| FT-218 | Notix email delivery (`MailService`): `MAIL_MODE=live` posts to Notix's transactional API; `MAIL_MODE=dev` logs the code and echoes it in `X-Dev-OTP` (bodies never carry codes) |
 | FT-219 | Password reset by emailed OTP: `forgot-password` → `reset-password-otp {email, code, newPassword}`; legacy reset-code-in-response pattern removed |
 | FT-220 | Email MFA fallback for login: `useEmailMfa:true` → `440 MFA_EMAIL_CHALLENGE` + 10-min challenge JWT → `POST /api/auth/verify-otp` issues session tokens |
 | FT-221 | Step-up verification: `request-step-up` / `verify-step-up` → 5-minute single-purpose JWT (`typ=step_up`) |
