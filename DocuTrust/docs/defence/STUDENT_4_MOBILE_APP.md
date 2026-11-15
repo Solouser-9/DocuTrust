@@ -87,12 +87,12 @@ One file turns the 46-entry registry into the navigation tree the user actually 
 | `MainTabs` | The signed-in shell: four bottom tabs — Vault, Shares, Alerts, Profile — with line-art `TabGlyph` icons drawn from plain Views. |
 | `VaultStack` | Dashboard, Documents, Folders, Expiring, Trash — the vault's own five-screen stack. |
 | `SharesStack` | Shares, CreateShare, ShareDetail. |
-| `AlertsStack` | Notifications, NotificationPrefs. |
-| `ProfileStack` | Profile, EditProfile, ChangePassword, Security, Help. |
+| `AlertsStack` | Notifications, NotificationPrefs — plus DocumentDetail, ShareDetail, VerificationDetail and AdminReviewDetail, mounted here because notification taps navigate to them by bare name. ||
+| `ProfileStack` | Profile, EditProfile, ChangePassword, Security, NotificationPrefs, Help. ||
 | `AdminStack` | The 7 admin screens — mounted only when `isAdmin` is true, so a non-admin's tree contains no admin screens at all. |
 | `OrgStack` | Org, TeamMembers, InviteMember — mounted only for managers (`isManager`). |
 | Modal presentations | UploadDocument, EditDocument, Versions, History, Search, CreateVerification, NotificationPrefs and CreateShare are mounted with `presentation: 'modal'` wherever they are pushed from outside their home cluster. |
-| Root-stack & cross-stack screens | PublicVerify and PublicVerifyResult sit on the root `MainStack` (outside the auth gate) for deep links; FolderDetail, VerificationDetail, CreateShare and ShareDetail are mounted inside the stacks where bare-name navigation from sibling tabs and deep links needs them. |
+| Root-stack & cross-stack screens | PublicVerify and PublicVerifyResult are mounted on `MainStack` **and** `AuthStack`, so a `docutrust://verify/:token` link resolves whether or not a session exists; FolderDetail, VerificationDetail, CreateShare, ShareDetail, DocumentDetail and AdminReviewDetail are mounted inside every stack that bare-name navigates to them (the pattern behind the `FIXED` comments in the file); `VerificationRequests` is mounted in `VaultStack`. |
 | `navTheme` / `screenOptions` | The parchment palette applied to the navigator itself, so navigation chrome matches the design tokens. |
 
 ### The complete 46-screen table (from `screens/index.js`)

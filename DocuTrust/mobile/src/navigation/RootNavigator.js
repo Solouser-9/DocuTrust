@@ -83,6 +83,7 @@ function VaultStack() {
             <Stack.Screen name="Search" component={SCREEN_REGISTRY.Search.component} options={{ presentation: 'modal' }} />
             <Stack.Screen name="CreateVerification" component={SCREEN_REGISTRY.CreateVerification.component} options={{ presentation: 'modal' }} />
             <Stack.Screen name="VerificationDetail" component={SCREEN_REGISTRY.VerificationDetail.component} />
+            <Stack.Screen name="VerificationRequests" component={SCREEN_REGISTRY.VerificationRequests.component} />
 
             {/* FIXED: Added CreateShare and ShareDetail here so the Share button works from Document Detail */}
             <Stack.Screen name="CreateShare" component={SCREEN_REGISTRY.CreateShare.component} options={{ presentation: 'modal' }} />
@@ -106,6 +107,13 @@ function AlertsStack() {
         <Stack.Navigator initialRouteName="Notifications" screenOptions={screenOptions}>
             <Stack.Screen name="Notifications" component={SCREEN_REGISTRY.Notifications.component} />
             <Stack.Screen name="NotificationPrefs" component={SCREEN_REGISTRY.NotificationPrefs.component} options={{ presentation: 'modal' }} />
+            {/* Notification taps deep-link into these (model.js routeFor); bare-name
+                navigation from this tab needs them mounted here (same pattern as
+                CreateShare/ShareDetail in VaultStack). */}
+            <Stack.Screen name="DocumentDetail" component={SCREEN_REGISTRY.DocumentDetail.component} />
+            <Stack.Screen name="ShareDetail" component={SCREEN_REGISTRY.ShareDetail.component} />
+            <Stack.Screen name="VerificationDetail" component={SCREEN_REGISTRY.VerificationDetail.component} />
+            <Stack.Screen name="AdminReviewDetail" component={SCREEN_REGISTRY.AdminReviewDetail.component} />
         </Stack.Navigator>
     );
 }
@@ -117,6 +125,7 @@ function ProfileStack() {
             <Stack.Screen name="EditProfile" component={SCREEN_REGISTRY.EditProfile.component} />
             <Stack.Screen name="ChangePassword" component={SCREEN_REGISTRY.ChangePassword.component} />
             <Stack.Screen name="Security" component={SCREEN_REGISTRY.Security.component} />
+            <Stack.Screen name="NotificationPrefs" component={SCREEN_REGISTRY.NotificationPrefs.component} options={{ presentation: 'modal' }} />
             <Stack.Screen name="Help" component={SCREEN_REGISTRY.Help.component} />
         </Stack.Navigator>
     );
@@ -188,6 +197,9 @@ function AuthStack() {
             <Stack.Screen name="ForgotPassword" component={SCREEN_REGISTRY.ForgotPassword.component} />
             <Stack.Screen name="ResetPassword" component={SCREEN_REGISTRY.ResetPassword.component} />
             <Stack.Screen name="Mfa" component={SCREEN_REGISTRY.Mfa.component} />
+            {/* Public proof screens: deep links must resolve while signed out too */}
+            <Stack.Screen name="PublicVerify" component={SCREEN_REGISTRY.PublicVerify.component} />
+            <Stack.Screen name="PublicVerifyResult" component={SCREEN_REGISTRY.PublicVerifyResult.component} />
         </Stack.Navigator>
     );
 }
