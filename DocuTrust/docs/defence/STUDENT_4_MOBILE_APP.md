@@ -1,6 +1,6 @@
 # Student 4 — Mobile App — Masterclass Deep Dive
 
-This file is the complete rehearsal brief for **Student 4, who owns the Mobile App slice** of DocuTrust — the React Native 0.88 / Expo SDK 58 client with its 46 screens, 9 frontend microservices, MVP pattern and single-flight `ApiClient`. It is written for the student presenting this slice and for the examiners who want to check every claim against the real repository. It expands the matching role section — *"Student 4 — Mobile App (React Native 0.88 / Expo SDK 58)"* — in `DEFENCE_GUIDE.md` at the repository root, which is the master index for all six roles; read the guide section first for the one-page story, then rehearse from here, where every claim is grounded in a file you can open on the day.
+This file is the complete rehearsal brief for **Student 4, who owns the Mobile App slice** of DocuTrust — the React Native 0.88 / Expo SDK 58 client with its 47 screens, 9 frontend microservices, MVP pattern and single-flight `ApiClient`. It is written for the student presenting this slice and for the examiners who want to check every claim against the real repository. It expands the matching role section — *"Student 4 — Mobile App (React Native 0.88 / Expo SDK 58)"* — in `DEFENCE_GUIDE.md` at the repository root, which is the master index for all six roles; read the guide section first for the one-page story, then rehearse from here, where every claim is grounded in a file you can open on the day.
 
 Everything named below is real: every screen name comes from `mobile/src/screens/index.js` (the `SCREEN_REGISTRY`), every class from the actual source files, every number from the tree. Where the project's standing claim is cited (doctor checks, bundle builds), it is labelled as such.
 
@@ -8,7 +8,7 @@ Everything named below is real: every screen name comes from `mobile/src/screens
 
 ## My slice in one page
 
-**Role in the team:** Everything the user touches: 46 screens, nine frontend microservices, the MVP pattern, and the app's own configuration story.
+**Role in the team:** Everything the user touches: 47 screens, nine frontend microservices, the MVP pattern, and the app's own configuration story.
 
 **Owns:** The Expo client — screens, components, navigation, the microservice folders (api / model / presenter each), `BasePresenter` and `usePresenter`, `ApiClient` with single-flight refresh, the Active Sessions UI, the declarative navigation tree, keyboard focus fixes, AsyncStorage JWT persistence (`docutrust.session.v1`), `mobile/.env` with `EXPO_PUBLIC_API_URL`, and the SDK 58 dependency matrix.
 
@@ -16,9 +16,9 @@ Everything named below is real: every screen name comes from `mobile/src/screens
 
 **My numbers:**
 
-- **46 screens** — the literal length of `SCREEN_REGISTRY` in `mobile/src/screens/index.js` (`SCREEN_COUNT` is exported from the same file).
+- **47 screens** — the literal length of `SCREEN_REGISTRY` in `mobile/src/screens/index.js` (`SCREEN_COUNT` is exported from the same file).
 - **9 frontend microservices** — `auth, documents, folders, sharing, verification, notifications, org, profile, admin`, each with its own `api.js` / `model.js` / `presenters.js`.
-- **48 presenter classes** across those 9 domains (12 auth, 10 documents, 2 folders, 3 sharing, 5 verification, 2 notifications, 3 org, 4 profile, 7 admin) — count the `export class ... extends BasePresenter` lines.
+- **49 presenter classes** across those 9 domains (13 auth, 10 documents, 2 folders, 3 sharing, 5 verification, 2 notifications, 3 org, 4 profile, 7 admin) — count the `export class ... extends BasePresenter` lines.
 - **20 shared components** in `mobile/src/components/`, one design system in `mobile/src/core/theme/`.
 - **Stack:** React Native **0.88.1** on **Expo SDK 58** (`expo ^58.0.0`) with **React 19.3.0**, React Navigation 7, AsyncStorage 2.2.0 — the SDK 58 matrix in `mobile/package.json`.
 - **Live conversation proof** — the emulator drives every flow, including every OTP path, against the running server; the same flows are replayed with manual API calls (Postman/cURL) side by side (standing claim, demonstrated live at the defence).
@@ -45,7 +45,7 @@ Seven folders under `mobile/src/`, plus the boot and config files. Every path be
 | File / folder | What it is, in one sentence |
 |---|---|
 | `mobile/App.js` | The boot file: hydrates the saved session from `AuthStore`, then mounts `RootNavigator` and the global `Toast` above a `SafeAreaProvider`. |
-| `mobile/src/screens/` | The 46 full-page views the user sees — deliberately dumb, each drawing what its presenter hands it. `index.js` is the `SCREEN_REGISTRY`. |
+| `mobile/src/screens/` | The 47 full-page views the user sees — deliberately dumb, each drawing what its presenter hands it. `index.js` is the `SCREEN_REGISTRY`. |
 | `mobile/src/components/` | 20 reusable pieces (buttons, cards, inputs, code boxes, toasts, skeletons) drawn once and shared by every screen, so the app feels like one product. |
 | `mobile/src/navigation/RootNavigator.js` | The home-screen gesture: decides between the auth stack and the main stack from `AuthStore`, lays out the four tabs, and gates the admin and org stacks by role. |
 | `mobile/src/mvp/BasePresenter.js` | The state machine every screen renders — five statuses, attach/detach lifecycle, a shared error-to-human-message mapper, and `go()`/`goBack()` navigation. |
@@ -77,7 +77,7 @@ Each domain splits the same way: `api.js` holds the thin `ApiClient` calls for t
 
 ### How `RootNavigator.js` wires the registry into stacks
 
-One file turns the 46-entry registry into the navigation tree the user actually walks. Every piece below is a real object or function in `mobile/src/navigation/RootNavigator.js`:
+One file turns the 47-entry registry into the navigation tree the user actually walks. Every piece below is a real object or function in `mobile/src/navigation/RootNavigator.js`:
 
 | Piece | What it does, in one sentence |
 |---|---|
@@ -87,26 +87,27 @@ One file turns the 46-entry registry into the navigation tree the user actually 
 | `MainTabs` | The signed-in shell: four bottom tabs — Vault, Shares, Alerts, Profile — with line-art `TabGlyph` icons drawn from plain Views. |
 | `VaultStack` | Dashboard, Documents, Folders, Expiring, Trash — the vault's own five-screen stack. |
 | `SharesStack` | Shares, CreateShare, ShareDetail. |
-| `AlertsStack` | Notifications, NotificationPrefs — plus DocumentDetail, ShareDetail, VerificationDetail and AdminReviewDetail, mounted here because notification taps navigate to them by bare name. ||
-| `ProfileStack` | Profile, EditProfile, ChangePassword, Security, NotificationPrefs, Help. ||
+| `AlertsStack` | Notifications, NotificationPrefs — plus DocumentDetail, ShareDetail, VerificationDetail and AdminReviewDetail, mounted here because notification taps navigate to them by bare name. |
+| `ProfileStack` | Profile, EditProfile, ChangePassword, Security, NotificationPrefs, Help. |
 | `AdminStack` | The 7 admin screens — mounted only when `isAdmin` is true, so a non-admin's tree contains no admin screens at all. |
 | `OrgStack` | Org, TeamMembers, InviteMember — mounted only for managers (`isManager`). |
 | Modal presentations | UploadDocument, EditDocument, Versions, History, Search, CreateVerification, NotificationPrefs and CreateShare are mounted with `presentation: 'modal'` wherever they are pushed from outside their home cluster. |
 | Root-stack & cross-stack screens | PublicVerify and PublicVerifyResult are mounted on `MainStack` **and** `AuthStack`, so a `docutrust://verify/:token` link resolves whether or not a session exists; FolderDetail, VerificationDetail, CreateShare, ShareDetail, DocumentDetail and AdminReviewDetail are mounted inside every stack that bare-name navigates to them (the pattern behind the `FIXED` comments in the file); `VerificationRequests` is mounted in `VaultStack`. |
 | `navTheme` / `screenOptions` | The parchment palette applied to the navigator itself, so navigation chrome matches the design tokens. |
 
-### The complete 46-screen table (from `screens/index.js`)
+### The complete 47-screen table (from `screens/index.js`)
 
 `SCREEN_REGISTRY` maps each name to `{ component, module, title }`; `RootNavigator` mounts these, and deep links, notification taps and presenter `go()` calls all use these names. Grouped by module, exactly as the file groups them.
 
-**Auth module (9 screens)**
+**Auth module (10 screens)**
 
 | Registry name | File | One sentence |
 |---|---|---|
 | `Splash` | `SplashScreen.js` | The boot screen that waits a beat for `AuthStore` hydration, then replaces itself with Dashboard if a session exists or Onboarding if not. |
 | `Onboarding` | `OnboardingScreen.js` | Three swipeable pages — the Vault, the Seal, the Proof — that sell the product idea in plain words before the first login. |
-| `Login` | `LoginScreen.js` | The sign-in form; on `MFA_REQUIRED` it hands the pending credentials to the Mfa screen instead of showing an error. |
+| `Login` | `LoginScreen.js` | The sign-in form; on `MFA_REQUIRED` it hands the pending credentials to the Mfa screen instead of showing an error, and an "Activate your invite" link opens `AcceptInvite` with the typed email pre-filled. |
 | `Register` | `RegisterScreen.js` | Account creation with a personal-vs-organisation switch that reveals the org name field. |
+| `AcceptInvite` | `AcceptInviteScreen.js` | The invitee side of FT-225: email + the 24-hour invite code + a chosen password activate the pending account and sign straight in. |
 | `VerifyOtp` | `VerifyOtpScreen.js` | The OTP-era email check: six code boxes for the emailed registration code, with a resend option — the screen that activates a `pending` account. |
 | `VerifyEmail` | `VerifyEmailScreen.js` | Confirms the emailed verification link token and tells the user whether the address is now trusted. |
 | `ForgotPassword` | `ForgotPasswordScreen.js` | Starts the OTP password reset: asks for the email, triggers the six-digit code, and never reveals whether the account exists. |
@@ -231,7 +232,7 @@ One file turns the 46-entry registry into the navigation tree the user actually 
 1. **The MVP pattern is a restaurant waiter.** The screen (view) is the dining room — it never walks into the kitchen (the API). The presenter is the waiter who takes your order, talks to the kitchen, and brings back the plated result; the model is the menu's ingredient list. When the kitchen changes a recipe, the dining room doesn't move — which is exactly how we swapped the whole auth flow for OTPs without rewriting a single screen layout.
 2. **Single-flight token refresh is one umbrella in a sudden downpour.** Five people walk out at once, it starts raining — they don't each buy an umbrella; one person buys it and the rest share it. When five API calls all get 'token expired' at the same moment, one refresh request goes out and the other four wait for its result, instead of stampeding the server with four identical refreshes.
 3. **The step-up UI is the "are you sure?" that actually checks something.** Normal confirmation dialogs are theater — everyone clicks OK. Ours can't be skipped: the app asks for a code that was just emailed, the server won't accept the destructive request without it, and the dialog you clicked is only the first of two independent proofs.
-4. **The screen registry is the phone's home-screen gesture.** You don't tell the phone "open the fourth icon in the second row of the third folder" — you say the app's name, and the phone itself knows where it lives. Every navigation in our app — a presenter's `go()`, a notification tap, a `docutrust://` deep link — says the *name* from `SCREEN_REGISTRY`, and the registry alone knows which component, which module and which title that name means. Change where a screen lives once, in one file, and forty-five other screens never notice.
+4. **The screen registry is the phone's home-screen gesture.** You don't tell the phone "open the fourth icon in the second row of the third folder" — you say the app's name, and the phone itself knows where it lives. Every navigation in our app — a presenter's `go()`, a notification tap, a `docutrust://` deep link — says the *name* from `SCREEN_REGISTRY`, and the registry alone knows which component, which module and which title that name means. Change where a screen lives once, in one file, and forty-six other screens never notice.
 5. **AsyncStorage is the app's coat pocket.** When you leave a building you keep your key in your pocket, not in your head — next morning you reach for it and you're still you. When the app is killed, the whole session — tokens and profile card — waits in the AsyncStorage pocket under `docutrust.session.v1`, so reopening the app doesn't mean signing in again. And just as you'd empty the pocket of a stolen coat, `logout()` wipes the pocket and the server revokes what was in it.
 
 ---
@@ -262,7 +263,7 @@ The rule: an expired access token must never be the user's problem, and a stolen
 ### C. The MFA email fallback (the 440 handshake)
 
 `LoginPresenter.submit()` catches `MFA_REQUIRED` and navigates: `this.go('Mfa', { email, password })`. On `MfaScreen`, "email me a code instead" calls `MfaPresenter.sendEmailCode()`, which re-runs login with `useEmailMfa: true`; the server answers **440 `MFA_EMAIL_CHALLENGE`** with a challenge in the body — which is exactly what `apiError.body = json` preserved. `this.challenge = e.body.challenge` switches the presenter's mode to `'email'`, and `submit()` then calls `authApi.verifyOtp(this.challenge, this.code)` — `POST /api/auth/verify-otp` — to trade challenge plus emailed code for the real session tokens. `AuthStore.setSession(...)` lands them, and the auth gate switches to the main stack on its own.
-**The polish pass (newest commit):** the Active Sessions UI lives in `SecurityScreen` — `SecurityPresenter.loadSessions()` fills loading, error and empty states, each row shows the device name (with an "Unknown device" fallback), the IP and the "Signed in" timestamp, and the per-row revoke button calls `revokeSession(id)`, toasts the outcome and reloads the ledger. Navigation stays declarative: every destination is a name in the 46-entry `SCREEN_REGISTRY`, and deep links and notification taps resolve through the same table. The polish pass also hardened the shell itself — `Screen.js` pads content by `insets.bottom` so nothing hides behind the gesture bar, stretches its content with `flexGrow: 1` so footers never float mid-screen, and the MFA code input gained a focus `Pressable` (`inputRef.current?.focus()`) so tapping the label re-opens the keyboard on every device.
+**The polish pass (newest commit):** the Active Sessions UI lives in `SecurityScreen` — `SecurityPresenter.loadSessions()` fills loading, error and empty states, each row shows the device name (with an "Unknown device" fallback), the IP and the "Signed in" timestamp, and the per-row revoke button calls `revokeSession(id)`, toasts the outcome and reloads the ledger. Navigation stays declarative: every destination is a name in the 47-entry `SCREEN_REGISTRY`, and deep links and notification taps resolve through the same table. The polish pass also hardened the shell itself — `Screen.js` pads content by `insets.bottom` so nothing hides behind the gesture bar, stretches its content with `flexGrow: 1` so footers never float mid-screen, and the MFA code input gained a focus `Pressable` (`inputRef.current?.focus()`) so tapping the label re-opens the keyboard on every device.
 
 ---
 
@@ -296,10 +297,10 @@ The rule: an expired access token must never be the user's problem, and a stolen
 Only configuration. package.json moved to expo ~58.0.25 and every dependency was realigned to the SDK 58 matrix with npx expo install --fix; app.json moved the splash configuration into the expo-splash-screen plugin (the new schema's way of declaring it); .npmrc sets legacy-peer-deps because the jump crosses React 19. No screen, presenter or API code changed. What could have broken — native module versions above all — is exactly what the verification covers: expo-doctor 20/20 on the SDK 58 matrix and a clean Metro/Hermes bundle, then the emulator driving the real flows against the live server.
 
 **Q: "Why is the screen registry more than a folder of imports?"**
-Because it is the single indirection point that navigation, deep links and notification taps share: a name maps to a component, its owning module and its title, and nothing navigates by constructing paths ad hoc. That gave us role-based mounting — the admin stack exists only for admins — and a countable inventory: forty-six entries is not a claim, it is a file. When a screen moves or a module changes hands, the registry is the one place that records it.
+Because it is the single indirection point that navigation, deep links and notification taps share: a name maps to a component, its owning module and its title, and nothing navigates by constructing paths ad hoc. That gave us role-based mounting — the admin stack exists only for admins — and a countable inventory: forty-seven entries is not a claim, it is a file. When a screen moves or a module changes hands, the registry is the one place that records it.
 
 **Q: "What does BasePresenter standardise, concretely?"**
-Five states — idle, loading, success, error, empty — plus attach and detach and a shared error mapper. Because every screen passes through it, every screen shows the same skeletons, the same empty states and the same toast behaviour, and the presenter logic stays in plain, reviewable classes with no React rendering. The pattern is why forty-six screens feel like one app instead of forty-six prototypes.
+Five states — idle, loading, success, error, empty — plus attach and detach and a shared error mapper. Because every screen passes through it, every screen shows the same skeletons, the same empty states and the same toast behaviour, and the presenter logic stays in plain, reviewable classes with no React rendering. The pattern is why forty-seven screens feel like one app instead of forty-seven prototypes.
 
 **Q: "Why does the logic live in presenters rather than in the components?"**
 Because the bugs that matter live in decisions, not rendering: does login route MFA correctly, does pagination accumulate, does the client refresh once for five parallel 401s. Keeping those decisions in plain presenter classes makes them reviewable line by line and checkable by driving the class directly — no rendering involved. Component snapshots would have looked impressive and caught nothing we cared about.
@@ -314,18 +315,18 @@ Because AsyncStorage is the platform-standard, dependency-free pocket every Reac
 
 **Q: "What changed for the app when the backend became microservices?"**
 
-> One line of configuration — that is the honest, deliberate answer. The app already spoke to a single base URL, and the gateway now *is* that URL: `EXPO_PUBLIC_API_URL` points at :8080, the receptionist forwards to auth-service or core-service, and every envelope, status code and typed error arrives byte-for-byte as before — so `endpoints.js`, `ApiClient` and all 46 screens are unchanged. Two new behaviours I can name: a login attempt while auth-service is down now surfaces as a typed `502 BAD_GATEWAY` envelope (my `BasePresenter` translates it to "The service is temporarily unavailable — try again shortly" instead of a raw network hang), and nothing else changed, because the client never inspected which process answered. The mobile `.env.example` comment is the only file that mentions the word gateway.
+> One line of configuration — that is the honest, deliberate answer. The app already spoke to a single base URL, and the gateway now *is* that URL: `EXPO_PUBLIC_API_URL` points at :8080, the receptionist forwards to auth-service or core-service, and every envelope, status code and typed error arrives byte-for-byte as before — so `endpoints.js`, `ApiClient` and all 47 screens are unchanged. Two new behaviours I can name: a login attempt while auth-service is down now surfaces as a typed `502 BAD_GATEWAY` envelope (my `BasePresenter` translates it to "The service is temporarily unavailable — try again shortly" instead of a raw network hang), and nothing else changed, because the client never inspected which process answered. The mobile `.env.example` comment is the only file that mentions the word gateway.
 
 **Q: "How does a `docutrust://verify/:token` deep link find the right screen?"**
 `app.json` declares the scheme `docutrust`, `RootNavigator` passes a `linking` config to `NavigationContainer` mapping `PublicVerify: 'verify/:token'`, and react-navigation resolves the URL to the name `PublicVerify` — which exists in `SCREEN_REGISTRY`, gets mounted from there, and receives the token as a route param. `PublicVerifyScreen` runs without a session because the registry lets the navigator mount it on the root stack, outside the auth gate. One name, one indirection point — the deep link never constructs a path by hand.
 
 **Q: "Why presenters instead of just calling fetch inside useEffect hooks?"**
-Three reasons. Reviewability: presenters are plain classes, so login, reset, MFA and deletion logic can be driven and checked directly, with no rendering involved. Ownership: each microservice folder is one student's territory, and the presenter is the contract between my screens and their data. Consistency: `BasePresenter` gives all 48 presenter classes the same five-state machine and the same error mapper, so screen forty-five behaves like screen one. A hook in a component would make all three of those properties someone's good intentions instead of the framework's guarantee.
+Three reasons. Reviewability: presenters are plain classes, so login, reset, MFA and deletion logic can be driven and checked directly, with no rendering involved. Ownership: each microservice folder is one student's territory, and the presenter is the contract between my screens and their data. Consistency: `BasePresenter` gives all 49 presenter classes the same five-state machine and the same error mapper, so screen forty-six behaves like screen one. A hook in a component would make all three of those properties someone's good intentions instead of the framework's guarantee.
 
 **Q: "Concretely, what did the SDK 58 upgrade change in the repo?"**
 Four files, zero logic. `package.json` moved to `expo ~58.0.25` and the aligned matrix — `react-native 0.88.1`, `react 19.3.0`, the expo-* packages to their `~58.0.x` lines. `app.json` now declares the splash through the `expo-splash-screen` plugin. `.npmrc` gained `legacy-peer-deps=true` because the jump crosses React 19. Nothing else — which is the point: the matrix alignment is exactly what `npx expo-doctor` (20/20) and the live emulator run verify.
 
-**Q: "How do 46 screens from six students end up looking like one app?"**
+**Q: "How do 47 screens from six students end up looking like one app?"**
 Three enforcement points. The design tokens: every colour, spacing step, radius and shadow comes from `core/theme/`, so nobody hand-picks a hex value. The components: 20 shared pieces from `AppButton` to `CodeBoxes`, so a form field is always *the* form field. And `BasePresenter`: every screen's loading, empty and error behaviour is the same machine. The screen registry keeps the inventory honest — a screen not in the registry does not exist. Consistency here is structure, not discipline.
 
 **Q: "What happens when the user goes offline mid-action?"**

@@ -1,7 +1,7 @@
 import { AuthStore } from '../../core/store/AuthStore';
 import { ToastStore } from '../../core/store/ToastStore';
 import { BasePresenter } from '../../mvp/BasePresenter';
-import { validateChangePassword, validateLogin, validateRegister, validateReset } from '../../core/utils/validators';
+import { validateAcceptInvite, validateChangePassword, validateLogin, validateRegister, validateReset } from '../../core/utils/validators';
 import { authApi } from './api';
 import { userFromApi } from './model';
 
@@ -62,6 +62,26 @@ export class RegisterPresenter extends BasePresenter {
       const payload = { email: this.form.email.trim().toLowerCase(), password: this.form.password, fullName: this.form.fullName.trim(), phone: this.form.phone.trim() || undefined, orgName: this.form.accountType === 'org' ? this.form.orgName.trim() : undefined };
       const { data: res } = await authApi.register(payload);
       this.setSuccess(res.user); this.go('VerifyOtp', { email: payload.email }); ToastStore.info('Enter the 6-digit code we emailed you.');
+    } catch (e) { const message = this.handleError(e); this.setError(message); this.setState({ fieldErrors: e.field ? { [e.field]: message } : {} }); }
+  }
+}
+
+export class AcceptInvitePresenter extends BasePresenter {
+  constructor(nav) { super(nav); this.form = { email: '', fullName: '', code: '', newPassword: '', confirmPassword: '' }; }
+  setField(key, value) { this.form[key] = value; this.setState({ fieldErrors: { ...this.state.fieldErrors, [key]: null } }); }
+  configure(email) { if (email) { this.form.email = email; this.setState({ data: { email } }); } }
+
+  async submit() {
+    if (this.state.status === 'loading') return;
+    const errors = validateAcceptInvite(this.form);
+    if (hasErrors(errors)) { this.setState({ fieldErrors: errors }); return; }
+    this.setLoading();
+    try {
+      const payload = { email: this.form.email.trim().toLowerCase(), code: this.form.code.trim(), password: this.form.newPassword, fullName: this.form.fullName.trim() || undefined };
+      const { data: res } = await authApi.acceptInvite(payload);
+      this.setSuccess({ accepted: true });
+      ToastStore.success('Invite accepted — welcome to the team.');
+      await AuthStore.setSession(userFromApi(res.user), res.accessToken, res.refreshToken);
     } catch (e) { const message = this.handleError(e); this.setError(message); this.setState({ fieldErrors: e.field ? { [e.field]: message } : {} }); }
   }
 }

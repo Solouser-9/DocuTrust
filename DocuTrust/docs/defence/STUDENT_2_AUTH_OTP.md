@@ -24,7 +24,7 @@ Read your role section in `DEFENCE_GUIDE.md` first, then rehearse from here; `do
   TTL (**24 h** for invites), **5 attempts** max, at most one live code per (purpose, target), sent through Notix.
 - Challenge tokens: MFA email challenge JWT **10 minutes** (`typ=mfa_challenge`); step-up token **5 minutes** (`typ=step_up`, header `X-Step-Up-Token`).
 - Rate-limit budgets: **auth 20/min**, public-share 30/min, public-verify 20/min, default 10/min — one Bucket4j bucket per scope|IP in a Caffeine cache.
-- 46 mobile screens, of which the **9 auth screens** are mine (`mobile/src/screens/`), including the OTP-era `VerifyOtp` screen.
+- 47 mobile screens, of which the **10 auth screens** are mine (`mobile/src/screens/`), including the OTP-era `VerifyOtp` screen and the `AcceptInvite` activation screen.
 - The headline property: after the overhaul, **no API response ever contains a password, a reset code, or a temporary password** — the inbox is the only place a code exists.
 
 > **Note:** every claim in this brief is verifiable from the public repository alone — the finding IDs are greppable in the code comments, and every flow (happy and negative path) is demonstrated live at the defence with manual API calls (Postman/cURL).

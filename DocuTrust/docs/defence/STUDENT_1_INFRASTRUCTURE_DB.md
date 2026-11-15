@@ -112,7 +112,7 @@ Every path below exists in the repository today — open any of them during the 
 
 | File | What it does, in one plain-English sentence |
 |---|---|
-| `mobile/src/screens/index.js` | The screen registry (`SCREEN_REGISTRY`, 46 entries, counted by `SCREEN_COUNT`): one place where a screen name maps to its component, owning module and title, so navigation, deep links and notification taps all share one directory instead of ad-hoc paths. |
+| `mobile/src/screens/index.js` | The screen registry (`SCREEN_REGISTRY`, 47 entries, counted by `SCREEN_COUNT`): one place where a screen name maps to its component, owning module and title, so navigation, deep links and notification taps all share one directory instead of ad-hoc paths. |
 | `mobile/src/navigation/RootNavigator.js` | The app switcher: builds the stacks from the registry and mounts the admin stack (`AdminStack`) only when the session role is `admin` — role-based navigation decided in one file. |
 | `mobile/src/screens/DashboardScreen.js` | The member's home screen: the shell view that greets the user and routes into the documents, shares and notifications flows. |
 | `mobile/src/screens/AdminDashboardScreen.js` | The registrar console's home screen: the admin-side shell over the review queue, users and audit views. |

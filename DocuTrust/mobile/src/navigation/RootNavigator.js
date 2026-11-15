@@ -192,6 +192,7 @@ function AuthStack() {
             <Stack.Screen name="Onboarding" component={SCREEN_REGISTRY.Onboarding.component} />
             <Stack.Screen name="Login" component={SCREEN_REGISTRY.Login.component} />
             <Stack.Screen name="Register" component={SCREEN_REGISTRY.Register.component} />
+            <Stack.Screen name="AcceptInvite" component={SCREEN_REGISTRY.AcceptInvite.component} />
             <Stack.Screen name="VerifyOtp" component={SCREEN_REGISTRY.VerifyOtp.component} />
             <Stack.Screen name="VerifyEmail" component={SCREEN_REGISTRY.VerifyEmail.component} />
             <Stack.Screen name="ForgotPassword" component={SCREEN_REGISTRY.ForgotPassword.component} />

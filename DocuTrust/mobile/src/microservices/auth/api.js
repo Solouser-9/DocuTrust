@@ -4,6 +4,7 @@ import { endpoints } from '../../core/api/endpoints';
 export const authApi = {
   register: (payload) => ApiClient.post(endpoints.register(), payload),
   login: (payload) => ApiClient.post(endpoints.login(), payload),
+  acceptInvite: (payload) => ApiClient.post(endpoints.acceptInvite(), payload, { auth: false }),
   logout: (refreshToken) => ApiClient.post(endpoints.logout(), { refreshToken }, { auth: false }),
   forgotPassword: (email) => ApiClient.post(endpoints.forgotPassword(), { email }, { auth: false }),
   resendOtp: (email) => ApiClient.post(endpoints.resendOtp(), { email }, { auth: false }),

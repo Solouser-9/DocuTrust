@@ -1,11 +1,12 @@
 // SCREEN_REGISTRY — the single inventory of every screen in the app.
-// 46 entries: name → { component, module, title }. RootNavigator mounts these;
+// 47 entries: name → { component, module, title }. RootNavigator mounts these;
 // deep links, notification taps and presenter `go()` calls all use these names.
 
 import SplashScreen from './SplashScreen';
 import OnboardingScreen from './OnboardingScreen';
 import LoginScreen from './LoginScreen';
 import RegisterScreen from './RegisterScreen';
+import AcceptInviteScreen from './AcceptInviteScreen';
 import VerifyOtpScreen from './VerifyOtpScreen';
 import VerifyEmailScreen from './VerifyEmailScreen';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
@@ -50,11 +51,12 @@ import TeamMembersScreen from './TeamMembersScreen';
 import InviteMemberScreen from './InviteMemberScreen';
 
 export const SCREEN_REGISTRY = {
-  // Auth (9)
+  // Auth (10)
   Splash: { component: SplashScreen, module: 'auth', title: 'DocuTrust' },
   Onboarding: { component: OnboardingScreen, module: 'auth', title: 'Welcome' },
   Login: { component: LoginScreen, module: 'auth', title: 'Sign in' },
   Register: { component: RegisterScreen, module: 'auth', title: 'Create account' },
+  AcceptInvite: { component: AcceptInviteScreen, module: 'auth', title: 'Activate invite' },
   VerifyOtp: { component: VerifyOtpScreen, module: 'auth', title: 'Verify email' },
   VerifyEmail: { component: VerifyEmailScreen, module: 'auth', title: 'Verify email' },
   ForgotPassword: { component: ForgotPasswordScreen, module: 'auth', title: 'Forgot password' },

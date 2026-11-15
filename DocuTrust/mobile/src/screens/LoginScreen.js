@@ -76,6 +76,12 @@ export default function LoginScreen({ navigation }) {
                   <Text style={styles.link}>Create an account</Text>
                 </TouchableOpacity>
               </View>
+              <View style={styles.registerRow}>
+                <Text style={type.caption}>Invited to an organisation? </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('AcceptInvite', { email: form.email })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={styles.link}>Activate your invite</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </ScrollView>
         </KeyboardAvoidingView>

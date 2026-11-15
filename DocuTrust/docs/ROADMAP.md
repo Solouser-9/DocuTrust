@@ -14,7 +14,7 @@ Rule of thumb: each student owns one backend module + its screens + its docs (ve
 
 **Week 1 exit criteria:** all V01–V08 migrations (the first eight of the final twelve) applied on Supabase; auth + document flows demoed live; 45-screen navigation skeleton with theme in the mobile app.
 
-## Week 2 — Product depth (all 46 screens, notifications, review process)
+## Week 2 — Product depth (all 47 screens, notifications, review process)
 
 | Days | Focus |
 |------|-------|
@@ -24,7 +24,7 @@ Rule of thumb: each student owns one backend module + its screens + its docs (ve
 | 4 | Mobile: Notifications (2) + Org (3) + Profile/Security (5) screens; notification prefs; deep links |
 | 5 | **Sprint demo:** full user journey + admin journey; presenter architecture review; edge-case fix list |
 
-**Week 2 exit criteria:** all 46 screens live against the real API; 200+ features checked off; zero known UI dead-ends.
+**Week 2 exit criteria:** all 47 screens live against the real API; 200+ features checked off; zero known UI dead-ends.
 
 ## Week 3 — Hardening, docs & defence
 

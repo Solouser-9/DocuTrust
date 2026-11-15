@@ -31,7 +31,7 @@ This file is the complete rehearsal brief for the student presenting **Student 6
 - **Scheduler:** first tick after 15 s, then every 60 s — and a **single-JVM contract**: it runs in core-service only, or notifications double-fire
 - **Seeded demo:** runs only on an empty `users` table of a localhost database — an org, six accounts, 2 folders, 5 documents, 1 share, 1 approved verification
 - **One-command build, one-command boot** — `mvn clean install` builds the whole reactor (3 runnable jars); `docker compose up --build` boots the entire campus; both work from a clean clone (demonstrated live at the defence)
-- `/api/meta` advertises `screens: 46`, `features: 216` (the hardcoded values in `HealthController.meta()`; keep the `screens` literal in sync with `SCREEN_REGISTRY` in `mobile/src/screens/index.js`, which holds 46 entries)
+- `/api/meta` advertises `screens: 47`, `features: 216` (the hardcoded values in `HealthController.meta()`; keep the `screens` literal in sync with `SCREEN_REGISTRY` in `mobile/src/screens/index.js`, which holds 47 entries)
 - Pool knobs I configure: **connection timeout 10 s, max lifetime 30 min** ("retire connections before Postgres default idle timeouts")
 - Mail timeouts: **10 s connect, 15 s request** (`MailService`'s HTTP client); provider failure surfaces as **502 MAIL_SEND_FAILED**
 - Jar artifacts: **`docutrust-gateway.jar`** (Main-Class `com.docutrust.gateway.Main`), **`docutrust-auth-service.jar`** (`com.docutrust.authservice.Main`), **`docutrust-core-service.jar`** (`com.docutrust.Main`)

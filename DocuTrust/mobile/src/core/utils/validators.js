@@ -45,6 +45,17 @@ export function validateRegister(form) {
   return errors;
 }
 
+export function validateAcceptInvite(form) {
+  const errors = {};
+  if (!isEmail(form.email)) errors.email = 'Enter the email the invite was sent to.';
+  const code = required(form.code, 'Invite code');
+  if (code) errors.code = code;
+  const pw = passwordError(form.newPassword);
+  if (pw) errors.newPassword = pw;
+  else if (form.newPassword !== form.confirmPassword) errors.confirmPassword = 'Passwords do not match.';
+  return errors;
+}
+
 export function validateReset(form) {
   const errors = {};
   const code = required(form.code, 'Reset code');

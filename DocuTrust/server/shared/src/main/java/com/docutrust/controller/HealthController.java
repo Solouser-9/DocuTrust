@@ -29,8 +29,8 @@ public final class HealthController {
                 "tagline", "Secure document vault & verification",
                 "description", DESCRIPTION,
                 "roles", Json.arr("admin", "org_manager", "member"),
-                // keep in sync with SCREEN_REGISTRY in mobile/src/screens/index.js (46 screens)
-                "screens", 46,
+                // keep in sync with SCREEN_REGISTRY in mobile/src/screens/index.js (47 screens)
+                "screens", 47,
                 "features", 216,
                 "infra", Json.obj(
                         "pool", "HikariCP",
