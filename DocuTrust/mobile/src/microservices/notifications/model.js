@@ -17,6 +17,8 @@ export function deepLinkTarget(type, entityId) {
     case 'document_expiry':
     case 'document_reminder':
     case 'document_review':
+    case 'expiry_warning':
+    case 'document_expired':
     case 'admin_decision':
       return { route: 'DocumentDetail', params: { id: entityId } };
     case 'share_opened':

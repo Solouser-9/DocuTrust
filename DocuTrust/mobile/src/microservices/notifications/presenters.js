@@ -64,7 +64,6 @@ export class NotificationsPresenter extends BasePresenter {
     }
     const target = deepLinkTarget(item.type, item.entityId);
     if (target && target.route === 'AdminReviewDetail' && 'documentId' in target.params) {
-      console.log('ALERT TAPPED:', item);
       try {
         let review = null;
         if (target.params.documentId) {
