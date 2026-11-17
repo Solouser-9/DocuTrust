@@ -76,6 +76,16 @@ export class SecurityPresenter extends BasePresenter {
   async load() {
     const user = AuthStore.getState().user || {};
     this.setSuccess({ user, mfaEnabled: !!user.mfaEnabled, sessions: [], sessionsLoading: true });
+    // Re-sync MFA state from the server so this screen reflects changes made
+    // elsewhere (another device, or an enable the cached user missed).
+    try {
+      const { data: res } = await authApi.me();
+      const fresh = userFromApi(res.user);
+      await AuthStore.setUser(fresh);
+      this.setState({ data: { ...(this.state.data || {}), user: fresh, mfaEnabled: !!fresh.mfaEnabled } });
+    } catch (e) {
+      // offline-friendly: keep the cached flag
+    }
     await this.loadSessions();
   }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -22,8 +22,12 @@ export default function SecurityScreen({ navigation }) {
   const [code, setCode] = useState('');
   const inputRef = useRef(null);
   const [disabling, setDisabling] = useState(false);
-  const user = (state.data && state.data.user) || AuthStore.getState().user || {};
-  const mfaEnabled = !!(state.data && state.data.mfaEnabled);
+  const session = useSyncExternalStore(AuthStore.subscribe, AuthStore.getState, AuthStore.getState);
+  const user = session.user || (state.data && state.data.user) || {};
+// The AuthStore is the live truth (confirmSetup/disable write it directly and
+// ProfileScreen binds to it the same way); the presenter snapshot can lag, so
+// MFA counts as enabled if either source reports it.
+  const mfaEnabled = !!(state.data && state.data.mfaEnabled) || !!(session.user && session.user.mfaEnabled);
   const setup = state.data && state.data.setup;
   const sessions = (state.data && state.data.sessions) || [];
   const sessionsLoading = !!(state.data && state.data.sessionsLoading);

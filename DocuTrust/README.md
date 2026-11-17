@@ -24,7 +24,7 @@
 | Run services | **3** (gateway + auth + core) — the vault-service and admin-service stubs exist but are not yet wired (Strangler Fig, next slices) |
 | Runnable artifacts | `mvn clean install` → **3 jars**: `docutrust-gateway.jar`, `docutrust-auth-service.jar`, `docutrust-core-service.jar` |
 | Database | **15 tables**, migrations V01–V12, **shared** by both DB-touching services (Neon PostgreSQL) |
-| Mobile screens | 46 (registered in `mobile/src/screens/index.js`) |
+| Mobile screens | 47 (registered in `mobile/src/screens/index.js`) |
 | Numbered features | 216 (`docs/FEATURES.md`, FT-001…FT-216) + OTP security addendum (FT-217…FT-234) |
 | User roles | `admin` > `org_manager` > `member` (server-enforced) |
 | Uploads | ≤ 25 MB, allow-listed mime types, AES-256-GCM encrypted |
@@ -41,14 +41,12 @@ Never written a line of code? Four pictures are enough to follow the whole syste
 - **A smartphone.** The app's `screens/` are the apps you open, `components/` are the buttons, `microservices/` are the invisible background processes that fetch your data.
 - **Sticky notes.** Each screen keeps "sticky notes" (React **hooks**) that remember things between redraws; our custom `usePresenter` note hires each screen's "waiter" and fires it on close.
 
-The full beginner walkthrough — hooks, architecture, the database, the server, the tech stack and the JSON order forms — is [DEFENCE_GUIDE.md](DEFENCE_GUIDE.md) **Part 2** (start at §2.9 for the three-building story).
+
 
 ## New here? Read in this order
 
 1. **The four pictures above** — the whole system in sixty seconds.
-2. **`DocuTrust_Beginner_Guide.docx/.pdf`** (this folder) — the beginner companion: hooks, architecture, the database, the server, the tech stack and the JSON order forms.
-3. **[`DEFENCE_GUIDE.md`](DEFENCE_GUIDE.md)** — the master index: the numbers everyone must know, the six roles with pitches and examiner Q&A, and the beginner walkthroughs in Part 2.
-4. **Your Masterclass file** — `docs/defence/STUDENT_1…6.md` for the slice you are defending: every owned file with a one-sentence job description, five layman's analogies, the code walkthrough, the domain glossary and the personal Q&A bank.
+
 
 ## Repository layout
 
@@ -59,7 +57,7 @@ DocuTrust/
 ├── server/          Pure Java 21 + Maven multi-module: gateway / auth-service / core-service / shared
 │                    (+ vault-service & admin-service stubs for the next strangler slices)
 ├── database/        PostgreSQL migrations (V01–V12), applied by core-service on boot
-├── docs/            API contracts, architecture, ER diagram, features, roadmap, edge cases, defence packs
+├── docs/            API contracts, architecture, ER diagram, features, roadmap, edge cases, 
 ├── server/Dockerfile          Multi-stage build → three runnable images (gateway / auth / core)
 └── docker-compose.yml (repo root)  One command starts the whole campus
 ```
@@ -134,11 +132,8 @@ That starts all three buildings: `gateway` on **localhost:8080** (the only addre
 | `docs/FEATURES.md` | 216 numbered features across 10 modules + OTP security addendum |
 | `docs/ARCHITECTURE.md` | The three-building topology, gateway routing rules, request lifecycle (Mermaid) |
 | `docs/ER_DIAGRAM.md` | 15-table schema, relationships, constraints — one shared database |
-| `docs/ROADMAP.md` | 3-week plan per student + risk register + the Phase 1–3 refactor history |
 | `docs/EDGE_CASES.md` | 10 hands-on edge-case demos with expected behaviour |
-| `docs/defence/STUDENT_PACK.md` | Per-student ownership summary (full packs in `DEFENCE_GUIDE.md`) |
-| `docs/defence/STUDENT_1…6.md` | Per-student Masterclass deep dives |
-| `DEFENCE_GUIDE.md` | **Oral defence playbook: 6 roles, elevator pitches, layman analogies, examiner Q&A** |
+
 
 ## The six hard challenges → where they live
 
